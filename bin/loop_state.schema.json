@@ -1,0 +1,192 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://novacaelum.com/schemas/loop-state/1",
+  "title": "Nova Caelum framework — loop.state.json",
+  "description": "T3.1 (ncf-m3-state-object). Machine-readable position for one multi-session loop run. Mirrors _agentOS/graph_library/contracts/run.py's MachineRun field-for-field where meaning matches (run_id, original_input, input_hash, status, current_node); framework_version plays machine_version's role. status uses PRD_NovaCaelumFramework_ChiefPM_2026-08-27.md #9.1's LoopStatus set, not run.py's RunStatus — the two enums diverge deliberately (see Engineer_Notes_T3.1_2026-09-06.md field-mirroring table). Validated by system/bin/loop_state.py's hand-rolled minimal draft-07 subset (required/type/enum/properties/items only) — see that file's module docstring for why.",
+  "type": "object",
+  "required": [
+    "run_id", "goal_slug", "framework_version", "original_input", "input_hash",
+    "status", "current_node", "trail", "artifacts", "gates", "budget",
+    "driver", "kill", "descope_decision_ref", "final_route", "escape_rate"
+  ],
+  "properties": {
+    "run_id": {
+      "description": "Mirrors MachineRun.run_id. Stored as a string (uuid4 hex/canonical form), not validated as a UUID by the minimal validator.",
+      "type": "string"
+    },
+    "goal_slug": {
+      "description": "The <goal-slug> in workspace/<goal-slug>/loop.state.json. Also this run's directory name.",
+      "type": "string"
+    },
+    "framework_version": {
+      "description": "Plays MachineRun.machine_version's role for the loop (renamed per DECISIONS.md D6 — 'machine_version' names the Graph Machine specifically).",
+      "type": "string"
+    },
+    "original_input": {
+      "description": "Mirrors MachineRun.original_input. Immutable — the raw submission, set once at init, never rewritten by later saves.",
+      "type": "string"
+    },
+    "input_hash": {
+      "description": "Mirrors MachineRun.input_hash. sha256 hex digest of original_input, computed once at init.",
+      "type": "string"
+    },
+    "status": {
+      "description": "PRD #9.1's LoopStatus set, verbatim. Deliberately NOT run.py's RunStatus (see Engineer_Notes field-mirroring table for the divergence).",
+      "type": "string",
+      "enum": [
+        "framing", "understanding", "deciding", "specifying", "executing",
+        "verifying", "live", "done", "descoped", "killed",
+        "abandoned_budget", "blocked_external"
+      ]
+    },
+    "current_node": {
+      "description": "Mirrors MachineRun.current_node. The stage/node identifier the run is presently in, or null before any node has been entered.",
+      "type": ["string", "null"]
+    },
+    "trail": {
+      "description": "History of node transitions, oldest first. The most recent entry has exited_at/outcome null while the run is still in that node.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["node", "entered_at", "exited_at", "outcome"],
+        "properties": {
+          "node": { "type": "string" },
+          "entered_at": { "type": "string" },
+          "exited_at": { "type": ["string", "null"] },
+          "outcome": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "artifacts": {
+      "description": "T3.2 (ncf-m3-artifact-freeze) fills the freeze/hash behavior; this shape is declared now, not implemented. One entry per artifact frozen at a gate pass.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "sha256", "frozen_at", "frozen_by"],
+        "properties": {
+          "path": { "type": "string" },
+          "sha256": { "type": "string" },
+          "frozen_at": { "type": ["string", "null"] },
+          "frozen_by": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "gates": {
+      "description": "T3.1 design decision (see Engineer_Notes 'gates[] item shape' section — T3.2 inherits this shape). One entry per node whose exit gate has been evaluated.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["node", "passed", "passed_at"],
+        "properties": {
+          "node": { "type": "string" },
+          "passed": { "type": "boolean" },
+          "passed_at": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "budget": {
+      "description": "T3.6 (ncf-m3-budget-counters) fills the counting behavior; this shape is declared now. Four Daniel caps plus three round/retry counters.",
+      "type": "object",
+      "required": [
+        "fresh_sessions", "compactions", "daniel_hours", "worklog_entries",
+        "rework_rounds", "doubled_back_rounds", "doubled_back_events", "stage_retries"
+      ],
+      "properties": {
+        "fresh_sessions": {
+          "description": "T3.6 (ncf-m3-budget-counters). Daniel's cap: 1, per task. `_is_measured: false` — a provisional number, not a measured one (PRD §6.3). `_is_detected: true` — the SessionStart hook observes `source=startup` and calls `bump --event startup`.",
+          "type": "object",
+          "required": ["cap", "used", "_is_measured", "_is_detected"],
+          "properties": {
+            "cap": { "type": ["number", "null"] },
+            "used": { "type": "number" },
+            "_is_measured": { "type": "boolean" },
+            "_is_detected": { "type": "boolean" }
+          }
+        },
+        "compactions": {
+          "description": "T3.6 (ncf-m3-budget-counters). Daniel's cap: 1, per task. `_is_measured: false` — a provisional number, not a measured one (PRD §6.3). `_is_detected: true` — the SessionStart hook observes `source=compact` and calls `bump --event compact`.",
+          "type": "object",
+          "required": ["cap", "used", "_is_measured", "_is_detected"],
+          "properties": {
+            "cap": { "type": ["number", "null"] },
+            "used": { "type": "number" },
+            "_is_measured": { "type": "boolean" },
+            "_is_detected": { "type": "boolean" }
+          }
+        },
+        "daniel_hours": {
+          "description": "T3.6 (ncf-m3-budget-counters). Daniel's cap: 2 real-time hours, per task. `_is_measured: false` — a provisional number, not a measured one (PRD §6.3). `_is_detected: false` and stays false: nothing in this system observes a real-time hour elapsing, so this cap is advisory only (PRD §6.2's own rule — an undetected cap is visibly advisory, not quietly decorative) and `used` is never bumped by any code path here.",
+          "type": "object",
+          "required": ["cap", "used", "_is_measured", "_is_detected"],
+          "properties": {
+            "cap": { "type": ["number", "null"] },
+            "used": { "type": "number" },
+            "_is_measured": { "type": "boolean" },
+            "_is_detected": { "type": "boolean" }
+          }
+        },
+        "worklog_entries": {
+          "description": "T3.6 (ncf-m3-budget-counters). Daniel's cap: 3 worklog entries, per task. `_is_measured: false` — a provisional number, not a measured one (PRD §6.3). `_is_detected: false` and stays false: nothing in this system observes a worklog append happening, so this cap is advisory only (PRD §6.2's own rule — an undetected cap is visibly advisory, not quietly decorative) and `used` is never bumped by any code path here.",
+          "type": "object",
+          "required": ["cap", "used", "_is_measured", "_is_detected"],
+          "properties": {
+            "cap": { "type": ["number", "null"] },
+            "used": { "type": "number" },
+            "_is_measured": { "type": "boolean" },
+            "_is_detected": { "type": "boolean" }
+          }
+        },
+        "rework_rounds": { "type": "integer" },
+        "doubled_back_rounds": {
+          "description": "T3.2 (ncf-m3-artifact-freeze). Incremented by check_frozen() (system/bin/loop_state.py) on every frozen-artifact hash mismatch it discovers — never by an argument telling it a change happened.",
+          "type": "integer"
+        },
+        "doubled_back_events": {
+          "description": "T3.2 (ncf-m3-artifact-freeze). One entry per hash mismatch check_frozen() has ever detected, oldest first — the durable answer to 'which artifact, and when'.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path", "detected_at"],
+            "properties": {
+              "path": { "type": "string" },
+              "detected_at": { "type": "string" }
+            }
+          }
+        },
+        "stage_retries": { "type": "integer" }
+      }
+    },
+    "driver": {
+      "description": "T3.6 fills behavior. Who/what was driving at the last approval.",
+      "type": "object",
+      "required": ["tier", "human_present", "authority"],
+      "properties": {
+        "tier": { "type": ["string", "null"] },
+        "human_present": { "type": "boolean" },
+        "authority": { "type": ["string", "null"] }
+      }
+    },
+    "kill": {
+      "description": "T3.5 (ncf-m3-kill-predicate) fills the predicate that sets this. Cause is recorded here; cause never gates (PRD #9.1).",
+      "type": "object",
+      "required": ["fired", "reason"],
+      "properties": {
+        "fired": { "type": "boolean" },
+        "reason": { "type": ["string", "null"] }
+      }
+    },
+    "descope_decision_ref": {
+      "description": "T3.5 (ncf-m3-kill-predicate). Set by the `descope` event verb (system/bin/loop_state.py); a pointer to where the descope decision is recorded, per PRD #9.3 ('the decision is recorded in loop.state.json, not remembered'). Null until a descope decision exists. Presence (not content) is what terminal_route() in loop_terminal.py consults — cause-blind by the same rule as `kill.reason`.",
+      "type": ["string", "null"]
+    },
+    "final_route": {
+      "description": "PRD #9.1's LEGITIMATE_TERMINAL set, or null before the run ends. Deliberately NOT run.py's TerminalRoute (see Engineer_Notes field-mirroring table).",
+      "type": ["string", "null"],
+      "enum": ["done", "descoped", "killed", null]
+    },
+    "escape_rate": {
+      "description": "PRD #6.3: recorded, never thresholded in v1. Written when work moves from finished to confirmed; null until then.",
+      "type": ["number", "null"]
+    }
+  }
+}
