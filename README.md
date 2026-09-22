@@ -98,8 +98,8 @@ It is included because the gate's contract is unreadable without it. **It will n
 
 | | |
 |---|---|
-| `bin/` | The engine. `loop_state.py` (state machine + CLI), `node_gates.py` (the exit checks), `loop_terminal.py` (status vocabulary), `plan_lint.py`, and the state JSON schema |
-| `tests/` | **Runnable.** `python3 -m pytest tests/ -q` → **20 passed**, stdlib only, no configuration |
+| `bin/` | The engine. `loop_state.py` (state machine + CLI), `node_gates.py` (the exit checks), `loop_terminal.py` (status vocabulary), `plan_lint.py`, `drive_map.py` (the run folder's generated map — rewritten at every node entry and gate), and the state JSON schema |
+| `tests/` | **Runnable.** `python3 -m pytest tests/ -q` → **31 passed**, stdlib only, no configuration |
 | `skills/` | The six skills, verbatim, including the demi-skills behind each node |
 | `reference/` | Not runnable standalone. The verifier MCP shim, and `test_node_gates.py` — 2,881 lines covering every gate branch, which needs the vault's fixture harness (`loader`, `assertions`, `plan_lint` fixtures) to execute |
 | `docs/` | The diagram |
