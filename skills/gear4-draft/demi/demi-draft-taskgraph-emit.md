@@ -129,10 +129,10 @@ Rules the script enforces, so getting them right first is cheaper:
 
 ```bash
 python3 _agentOS/system/bin/taskgraph_emit.py plan  <workplan.json>   # dry run
-python3 _agentOS/system/bin/taskgraph_emit.py apply <workplan.json>
+python3 _agentOS/system/bin/taskgraph_emit.py apply <workplan.json> --yes
 ```
 
-Read the dry run before applying. Then apply.
+Read the dry run before applying. Then apply. `--yes` is there because the dry run you just read IS the confirmation; without it `apply` waits on stdin for the word `file`, which an agent's shell never sends — the command hangs.
 
 ## Gate contribution
 

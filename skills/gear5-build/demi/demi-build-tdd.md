@@ -12,7 +12,7 @@ version: 1.0
 
 **Parent node:** `gear5-build`
 **Invocable:** No. Reached only by its parent node — embedded in every implementer brief by trigger token, or dispatched with it.
-**Emits:** the `## RED` and `## GREEN` sections of `<run-dir>/build/<row>/report.md`
+**Emits:** the `## RED` and `## GREEN` sections of the report — returned in the implementer's final message; the controller writes them to `<run-dir>/build/<row>/report.md`
 
 ## Overview
 
@@ -50,7 +50,7 @@ Turn one row's criteria into a red→green run.
 
 ### Deliverable format
 
-- **Writes:** the code and its test; `## RED` / `## GREEN` in the report — tool output trimmed to the failing/passing lines plus the summary line, never a status word alone.
+- **Writes:** the code and its test. **Returns, never writes:** `## RED` / `## GREEN` in the report, as the final message — tool output trimmed to the failing/passing lines plus the summary line, never a status word alone.
 - **Returns:** nothing beyond the implementer contract in the brief.
 
 ### Escalate if

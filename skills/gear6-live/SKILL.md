@@ -46,7 +46,11 @@ Does NOT fire for:
 
    Never interrupt the run for a non-blocking bug. Fixing them as they appear is what breaks the next thing and starts the loop this stage exists to end.
 7. **Triage once, at the end.** With the test finished, put the whole list in front of Daniel together and decide each one: fix now · defer to v2 · not a bug. Judged as a set, most of them are small — that is the judgement the mid-test fix denies you. File the keepers as `ready` rows for a later run. Whatever comes back as "fix now" is a new run, entered at its own node — not more work inside this one.
-8. **Exit.** Daniel's word that the test cleared → `python3 $AGENTOS_ROOT/system/bin/loop_state.py confirm <state> --by daniel`. `status: done`, `final_route: done`. Then the finish: the `Rulings I made` list, and the escape-rate line the confirm wrote.
+8. **Exit.** Daniel's word that the test cleared → record his grant, then confirm. Two commands, in this order, with absolute paths (`$AGENTOS_ROOT` is unset in a plain shell):
+   - `python3 $AGENTOS_ROOT/system/bin/loop_state.py record-approval <state> --tier <your registry tier, e.g. orchestration> --human-present true --authority human`
+   - `python3 $AGENTOS_ROOT/system/bin/loop_state.py confirm <state> --by daniel`
+
+   `record-approval` writes down a grant Daniel has already given in the session; run it only after his word, never to manufacture one. If `confirm` refuses with `driver.authority == 'human'` and Daniel has cleared the test, the grant was never recorded — run the first command. That is not the by-design refusal below. `status: done`, `final_route: done`. Then the finish: the `Rulings I made` list, and the escape-rate line the confirm wrote.
 
 ## The grade
 

@@ -1,189 +1,144 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1520" height="1110" viewBox="0 0 1520 1110" role="img" aria-labelledby="hstitle hsdesc">
-<title id="hstitle">The Hyperspace Engine: five nodes and four gates</title>
-<desc id="hsdesc">A left-to-right pipeline of five nodes. gear2-understand exits through check_understanding freezing Problem.md and tests.json; gear3-decide through check_deciding freezing Decision.md, Deferred.md, mapping.json and principles.json; gear4-draft through check_specifying freezing PRD.md, Plan.md and workplan.json; gear5-build through check_executing freezing BUILD_LEDGER.md and RECONCILIATION.md. gear6-live has no exit gate; it is left by confirm, which only a human driver may call. Below the pipeline two parallel tracks show that current_node advances understanding, deciding, specifying, executing and then stops, while status continues to live and then done. The Build gate has four exits: 0 pass, 1 refused, 2 evidence unreadable, 3 HOLD.</desc>
-<rect x="0" y="0" width="1520" height="1110" fill="#1d1329"/>
-<rect x="40" y="36" width="40" height="2" fill="#5B7D73"/>
-<text x="40" y="82" font-family="Georgia,'Iowan Old Style','Palatino Linotype','Book Antiqua',serif" font-size="37" fill="#f5ebdd">The Hyperspace Engine</text>
-<text x="40" y="110" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="17" fill="#f5ebdd" fill-opacity="0.74">Five nodes. Four gates. One way through.</text>
-<text x="1480" y="54" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="11.5" fill="#f5ebdd" fill-opacity="0.55" text-anchor="end" font-weight="600" letter-spacing="0.14em">NOVA CAELUM · DEVELOPMENT LOOP</text>
-<text x="1480" y="84" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="14" fill="#f5ebdd" fill-opacity="0.48" text-anchor="end">runs inside Claude Code</text>
-<line x1="40" y1="132" x2="1480" y2="132" stroke="#3F3D6C" stroke-width="1"/>
-<rect x="40" y="156" width="268" height="316" fill="#2A1F3D" rx="3" stroke="#3F3D6C" stroke-width="1"/>
-<rect x="40" y="156" width="268" height="3" fill="#3F3D6C"/>
-<text x="56" y="188" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="13" fill="#6E78B0" letter-spacing="0.12em">N1</text>
-<text x="56" y="232" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="23" fill="#f5ebdd">gear2-understand</text>
-<line x1="56" y1="254" x2="292" y2="254" stroke="#3F3D6C" stroke-width="1" stroke-opacity="0.85"/>
-<text x="56" y="284" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="11" fill="#f5ebdd" fill-opacity="0.55" font-weight="600" letter-spacing="0.14em">ENTERS WHEN</text>
-<text x="56" y="310" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="17" fill="#f5ebdd" fill-opacity="0.86">A goal nobody</text>
-<text x="56" y="333" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="17" fill="#f5ebdd" fill-opacity="0.86">has framed.</text>
-<text x="56" y="378" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="11" fill="#f5ebdd" fill-opacity="0.55" font-weight="600" letter-spacing="0.14em">LEAVES WITH</text>
-<text x="56" y="404" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="18" fill="#f5ebdd">tests.json</text>
-<text x="56" y="422" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="13.5" fill="#f5ebdd" fill-opacity="0.6">what “done” means,</text>
-<text x="56" y="440" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="13.5" fill="#f5ebdd" fill-opacity="0.6">frozen before any</text>
-<text x="56" y="458" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="13.5" fill="#f5ebdd" fill-opacity="0.6">design exists.</text>
-<path d="M314.5 303.0 L326.5 314.0 L314.5 325.0 Z" fill="#6C607D"/>
-<rect x="333" y="156" width="268" height="316" fill="#2A1F3D" rx="3" stroke="#3F3D6C" stroke-width="1"/>
-<rect x="333" y="156" width="268" height="3" fill="#3F3D6C"/>
-<text x="349" y="188" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="13" fill="#6E78B0" letter-spacing="0.12em">N2</text>
-<text x="349" y="232" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="23" fill="#f5ebdd">gear3-decide</text>
-<line x1="349" y1="254" x2="585" y2="254" stroke="#3F3D6C" stroke-width="1" stroke-opacity="0.85"/>
-<text x="349" y="284" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="11" fill="#f5ebdd" fill-opacity="0.55" font-weight="600" letter-spacing="0.14em">ENTERS WHEN</text>
-<text x="349" y="310" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="17" fill="#f5ebdd" fill-opacity="0.86">Tests frozen,</text>
-<text x="349" y="333" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="17" fill="#f5ebdd" fill-opacity="0.86">design open.</text>
-<text x="349" y="378" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="11" fill="#f5ebdd" fill-opacity="0.55" font-weight="600" letter-spacing="0.14em">LEAVES WITH</text>
-<text x="349" y="404" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="18" fill="#f5ebdd">mapping.json</text>
-<text x="349" y="422" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="13.5" fill="#f5ebdd" fill-opacity="0.6">every test mapped to</text>
-<text x="349" y="440" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="13.5" fill="#f5ebdd" fill-opacity="0.6">a component; all else</text>
-<text x="349" y="458" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="13.5" fill="#f5ebdd" fill-opacity="0.6">deferred by name.</text>
-<path d="M607.5 303.0 L619.5 314.0 L607.5 325.0 Z" fill="#6C607D"/>
-<rect x="626" y="156" width="268" height="316" fill="#2A1F3D" rx="3" stroke="#3F3D6C" stroke-width="1"/>
-<rect x="626" y="156" width="268" height="3" fill="#3F3D6C"/>
-<text x="642" y="188" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="13" fill="#6E78B0" letter-spacing="0.12em">N3</text>
-<text x="642" y="232" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="23" fill="#f5ebdd">gear4-draft</text>
-<line x1="642" y1="254" x2="878" y2="254" stroke="#3F3D6C" stroke-width="1" stroke-opacity="0.85"/>
-<text x="642" y="284" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="11" fill="#f5ebdd" fill-opacity="0.55" font-weight="600" letter-spacing="0.14em">ENTERS WHEN</text>
-<text x="642" y="310" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="17" fill="#f5ebdd" fill-opacity="0.86">Decision frozen,</text>
-<text x="642" y="333" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="17" fill="#f5ebdd" fill-opacity="0.86">nothing filed.</text>
-<text x="642" y="378" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="11" fill="#f5ebdd" fill-opacity="0.55" font-weight="600" letter-spacing="0.14em">LEAVES WITH</text>
-<text x="642" y="404" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="18" fill="#f5ebdd">Plan.md</text>
-<text x="642" y="422" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="13.5" fill="#f5ebdd" fill-opacity="0.6">every task block holds</text>
-<text x="642" y="440" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="13.5" fill="#f5ebdd" fill-opacity="0.6">the id the Task Graph</text>
-<text x="642" y="458" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="13.5" fill="#f5ebdd" fill-opacity="0.6">handed back.</text>
-<path d="M900.5 303.0 L912.5 314.0 L900.5 325.0 Z" fill="#6C607D"/>
-<rect x="919" y="156" width="268" height="316" fill="#2A1F3D" rx="3" stroke="#3F3D6C" stroke-width="1"/>
-<rect x="919" y="156" width="268" height="3" fill="#3F3D6C"/>
-<text x="935" y="188" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="13" fill="#6E78B0" letter-spacing="0.12em">N4</text>
-<text x="935" y="232" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="23" fill="#f5ebdd">gear5-build</text>
-<line x1="935" y1="254" x2="1171" y2="254" stroke="#3F3D6C" stroke-width="1" stroke-opacity="0.85"/>
-<text x="935" y="284" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="11" fill="#f5ebdd" fill-opacity="0.55" font-weight="600" letter-spacing="0.14em">ENTERS WHEN</text>
-<text x="935" y="310" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="17" fill="#f5ebdd" fill-opacity="0.86">Rows filed,</text>
-<text x="935" y="333" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="17" fill="#f5ebdd" fill-opacity="0.86">software owed.</text>
-<text x="935" y="378" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="11" fill="#f5ebdd" fill-opacity="0.55" font-weight="600" letter-spacing="0.14em">LEAVES WITH</text>
-<text x="935" y="404" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="18" fill="#f5ebdd">RECONCILIATION.md</text>
-<text x="935" y="422" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="13.5" fill="#f5ebdd" fill-opacity="0.6">every row closed by</text>
-<text x="935" y="440" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="13.5" fill="#f5ebdd" fill-opacity="0.6">verifier verdict,</text>
-<text x="935" y="458" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="13.5" fill="#f5ebdd" fill-opacity="0.6">never by your claim.</text>
-<path d="M1193.5 303.0 L1205.5 314.0 L1193.5 325.0 Z" fill="#6C607D"/>
-<rect x="1212" y="156" width="268" height="316" fill="#2A1F3D" rx="3" stroke="#3F3D6C" stroke-width="1"/>
-<rect x="1212" y="156" width="268" height="3" fill="#E8B87A"/>
-<text x="1228" y="188" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="13" fill="#6E78B0" letter-spacing="0.12em">N5</text>
-<text x="1464" y="188" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="10.5" fill="#E8B87A" fill-opacity="0.9" text-anchor="end" font-weight="600" letter-spacing="0.14em">STAGE · NO GATE</text>
-<text x="1228" y="232" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="23" fill="#f5ebdd">gear6-live</text>
-<line x1="1228" y1="254" x2="1464" y2="254" stroke="#3F3D6C" stroke-width="1" stroke-opacity="0.85"/>
-<text x="1228" y="284" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="11" fill="#f5ebdd" fill-opacity="0.55" font-weight="600" letter-spacing="0.14em">ENTERS WHEN</text>
-<text x="1228" y="310" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="17" fill="#f5ebdd" fill-opacity="0.86">Build finished,</text>
-<text x="1228" y="333" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="17" fill="#f5ebdd" fill-opacity="0.86">Daniel’s test owed.</text>
-<text x="1228" y="378" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="11" fill="#f5ebdd" fill-opacity="0.55" font-weight="600" letter-spacing="0.14em">LEAVES WITH</text>
-<text x="1228" y="404" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="18" fill="#E8B87A">confirm</text>
-<text x="1228" y="422" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="13.5" fill="#f5ebdd" fill-opacity="0.6">a human driver, or</text>
-<text x="1228" y="440" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="13.5" fill="#f5ebdd" fill-opacity="0.6">nothing. Nothing is</text>
-<text x="1228" y="458" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="13.5" fill="#f5ebdd" fill-opacity="0.6">built in this node.</text>
-<line x1="174" y1="472" x2="174" y2="506" stroke="#3F3D6C" stroke-width="1" stroke-dasharray="2 5"/>
-<rect x="40" y="506" width="268" height="210" fill="none" rx="3" stroke="#3F3D6C" stroke-width="1"/>
-<text x="56" y="534" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="11" fill="#f5ebdd" fill-opacity="0.55" font-weight="600" letter-spacing="0.14em">EXIT GATE</text>
-<text x="56" y="562" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="16" fill="#6E78B0" font-weight="600">check_understanding</text>
-<line x1="56" y1="580" x2="292" y2="580" stroke="#3F3D6C" stroke-width="1" stroke-opacity="0.85"/>
-<text x="56" y="606" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="10.5" fill="#f5ebdd" fill-opacity="0.45" font-weight="600" letter-spacing="0.14em">FREEZES BY SHA256</text>
-<text x="56" y="630" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="16.5" fill="#f5ebdd" fill-opacity="0.92">Problem.md</text>
-<text x="56" y="652" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="16.5" fill="#f5ebdd" fill-opacity="0.92">tests.json</text>
-<line x1="467" y1="472" x2="467" y2="506" stroke="#3F3D6C" stroke-width="1" stroke-dasharray="2 5"/>
-<rect x="333" y="506" width="268" height="210" fill="none" rx="3" stroke="#3F3D6C" stroke-width="1"/>
-<text x="349" y="534" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="11" fill="#f5ebdd" fill-opacity="0.55" font-weight="600" letter-spacing="0.14em">EXIT GATE</text>
-<text x="349" y="562" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="16" fill="#6E78B0" font-weight="600">check_deciding</text>
-<line x1="349" y1="580" x2="585" y2="580" stroke="#3F3D6C" stroke-width="1" stroke-opacity="0.85"/>
-<text x="349" y="606" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="10.5" fill="#f5ebdd" fill-opacity="0.45" font-weight="600" letter-spacing="0.14em">FREEZES BY SHA256</text>
-<text x="349" y="630" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="16.5" fill="#f5ebdd" fill-opacity="0.92">Decision.md</text>
-<text x="349" y="652" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="16.5" fill="#f5ebdd" fill-opacity="0.92">Deferred.md</text>
-<text x="349" y="674" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="16.5" fill="#f5ebdd" fill-opacity="0.92">mapping.json</text>
-<text x="349" y="696" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="16.5" fill="#f5ebdd" fill-opacity="0.92">principles.json</text>
-<line x1="760" y1="472" x2="760" y2="506" stroke="#3F3D6C" stroke-width="1" stroke-dasharray="2 5"/>
-<rect x="626" y="506" width="268" height="210" fill="none" rx="3" stroke="#3F3D6C" stroke-width="1"/>
-<text x="642" y="534" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="11" fill="#f5ebdd" fill-opacity="0.55" font-weight="600" letter-spacing="0.14em">EXIT GATE</text>
-<text x="642" y="562" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="16" fill="#6E78B0" font-weight="600">check_specifying</text>
-<line x1="642" y1="580" x2="878" y2="580" stroke="#3F3D6C" stroke-width="1" stroke-opacity="0.85"/>
-<text x="642" y="606" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="10.5" fill="#f5ebdd" fill-opacity="0.45" font-weight="600" letter-spacing="0.14em">FREEZES BY SHA256</text>
-<text x="642" y="630" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="16.5" fill="#f5ebdd" fill-opacity="0.92">PRD.md</text>
-<text x="642" y="652" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="16.5" fill="#f5ebdd" fill-opacity="0.92">Plan.md</text>
-<text x="642" y="674" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="16.5" fill="#f5ebdd" fill-opacity="0.92">workplan.json</text>
-<line x1="1053" y1="472" x2="1053" y2="506" stroke="#3F3D6C" stroke-width="1" stroke-dasharray="2 5"/>
-<rect x="919" y="506" width="268" height="210" fill="none" rx="3" stroke="#3F3D6C" stroke-width="1"/>
-<text x="935" y="534" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="11" fill="#f5ebdd" fill-opacity="0.55" font-weight="600" letter-spacing="0.14em">EXIT GATE</text>
-<text x="935" y="562" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="16" fill="#6E78B0" font-weight="600">check_executing</text>
-<line x1="935" y1="580" x2="1171" y2="580" stroke="#3F3D6C" stroke-width="1" stroke-opacity="0.85"/>
-<text x="935" y="606" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="10.5" fill="#f5ebdd" fill-opacity="0.45" font-weight="600" letter-spacing="0.14em">FREEZES BY SHA256</text>
-<text x="935" y="630" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="16.5" fill="#f5ebdd" fill-opacity="0.92">BUILD_LEDGER.md</text>
-<text x="935" y="652" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="16.5" fill="#f5ebdd" fill-opacity="0.92">RECONCILIATION.md</text>
-<text x="935" y="700" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="14" fill="#5B7D73">and sets  status: live</text>
-<line x1="1346" y1="472" x2="1346" y2="506" stroke="#3F3D6C" stroke-width="1" stroke-opacity="0.5" stroke-dasharray="2 5"/>
-<rect x="1212" y="506" width="268" height="210" fill="none" rx="3" stroke="#3F3D6C" stroke-width="1"/>
-<text x="1228" y="534" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="11" fill="#E8B87A" fill-opacity="0.85" font-weight="600" letter-spacing="0.14em">NO EXIT GATE</text>
-<text x="1228" y="562" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="16" fill="#E8B87A">confirm</text>
-<line x1="1228" y1="580" x2="1464" y2="580" stroke="#3F3D6C" stroke-width="1" stroke-opacity="0.85"/>
-<text x="1228" y="608" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="13.5" fill="#f5ebdd" fill-opacity="0.72">gate-pass --node live</text>
-<text x="1228" y="630" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="14" fill="#f5ebdd" fill-opacity="0.62">is refused outright. live is a</text>
-<text x="1228" y="649" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="14" fill="#f5ebdd" fill-opacity="0.62">stage you sit in, not a node</text>
-<text x="1228" y="668" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="14" fill="#f5ebdd" fill-opacity="0.62">you exit.</text>
-<text x="1228" y="700" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="14" fill="#E8B87A">human authority only</text>
-<line x1="40" y1="748" x2="1480" y2="748" stroke="#3F3D6C" stroke-width="1"/>
-<text x="40" y="768" font-family="Georgia,'Iowan Old Style','Palatino Linotype','Book Antiqua',serif" font-size="21" fill="#6E78B0">Two axes, one run</text>
-<text x="250" y="768" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="15" fill="#f5ebdd" fill-opacity="0.62">the node stops moving; the run does not.</text>
-<text x="40" y="814" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="15" fill="#f5ebdd" fill-opacity="0.55">current_node</text>
-<line x1="172" y1="820" x2="1480" y2="820" stroke="#3F3D6C" stroke-width="1.5"/>
-<circle cx="174" cy="820" r="5.5" fill="#f5ebdd"/>
-<text x="174" y="850" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="19" fill="#f5ebdd" text-anchor="middle">understanding</text>
-<circle cx="467" cy="820" r="5.5" fill="#f5ebdd"/>
-<text x="467" y="850" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="19" fill="#f5ebdd" text-anchor="middle">deciding</text>
-<circle cx="760" cy="820" r="5.5" fill="#f5ebdd"/>
-<text x="760" y="850" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="19" fill="#f5ebdd" text-anchor="middle">specifying</text>
-<circle cx="1053" cy="820" r="5.5" fill="#f5ebdd"/>
-<text x="1053" y="850" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="19" fill="#f5ebdd" text-anchor="middle">executing</text>
-<circle cx="1346" cy="820" r="6" fill="#1d1329" stroke="#f5ebdd" stroke-width="2"/>
-<text x="1346" y="850" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="19" fill="#f5ebdd" fill-opacity="0.55" text-anchor="middle">executing</text>
-<circle cx="1434" cy="820" r="5.5" fill="#f5ebdd"/>
-<line x1="1053" y1="798" x2="1053" y2="806" stroke="#E8B87A" stroke-width="1.5"/>
-<line x1="1053" y1="798" x2="1434" y2="798" stroke="#E8B87A" stroke-width="1.5"/>
-<line x1="1434" y1="798" x2="1434" y2="806" stroke="#E8B87A" stroke-width="1.5"/>
-<text x="1243.5" y="790" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="13.5" fill="#E8B87A" text-anchor="middle">unchanged · the node does not move</text>
-<text x="40" y="886" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="15" fill="#f5ebdd" fill-opacity="0.55">status</text>
-<line x1="172" y1="892" x2="1480" y2="892" stroke="#3F3D6C" stroke-width="1.5"/>
-<circle cx="174" cy="892" r="5.5" fill="#f5ebdd"/>
-<text x="174" y="922" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="19" fill="#f5ebdd" text-anchor="middle">understanding</text>
-<circle cx="467" cy="892" r="5.5" fill="#f5ebdd"/>
-<text x="467" y="922" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="19" fill="#f5ebdd" text-anchor="middle">deciding</text>
-<circle cx="760" cy="892" r="5.5" fill="#f5ebdd"/>
-<text x="760" y="922" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="19" fill="#f5ebdd" text-anchor="middle">specifying</text>
-<circle cx="1053" cy="892" r="5.5" fill="#f5ebdd"/>
-<text x="1053" y="922" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="19" fill="#f5ebdd" text-anchor="middle">executing</text>
-<circle cx="1346" cy="892" r="5.5" fill="#E8B87A"/>
-<text x="1346" y="922" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="19" fill="#E8B87A" text-anchor="middle">live</text>
-<circle cx="1434" cy="892" r="5.5" fill="#5B7D73"/>
-<text x="1434" y="922" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="19" fill="#5B7D73" text-anchor="middle">done</text>
-<text x="1199.5" y="878" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="13.5" fill="#f5ebdd" fill-opacity="0.6" text-anchor="middle">Build gate</text>
-<text x="1390.0" y="878" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="13.5" fill="#5B7D73" text-anchor="middle">confirm</text>
-<line x1="40" y1="928" x2="1480" y2="928" stroke="#3F3D6C" stroke-width="1"/>
-<text x="40" y="958" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="11.5" fill="#f5ebdd" fill-opacity="0.6" font-weight="600" letter-spacing="0.14em">THE BUILD GATE HAS FOUR EXITS</text>
-<rect x="40.0" y="972" width="28" height="28" fill="#5B7D73" rx="3"/>
-<text x="54.0" y="992" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="17" fill="#1d1329" text-anchor="middle" font-weight="700">0</text>
-<text x="80.0" y="992" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="17" fill="#f5ebdd" font-weight="600">pass</text>
-<text x="40.0" y="1016" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="14.5" fill="#f5ebdd" fill-opacity="0.62">passed and frozen; status becomes live</text>
-<rect x="404.5" y="972" width="28" height="28" fill="#5C1E23" rx="3"/>
-<text x="418.5" y="992" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="17" fill="#f5ebdd" text-anchor="middle" font-weight="700">1</text>
-<text x="444.5" y="992" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="17" fill="#f5ebdd" font-weight="600">refused</text>
-<text x="404.5" y="1016" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="14.5" fill="#f5ebdd" fill-opacity="0.62">a row is missing, or claimed done unproven</text>
-<rect x="769.0" y="972" width="28" height="28" fill="#6C607D" rx="3"/>
-<text x="783.0" y="992" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="17" fill="#1d1329" text-anchor="middle" font-weight="700">2</text>
-<text x="809.0" y="992" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="17" fill="#f5ebdd" font-weight="600">unreadable</text>
-<text x="769.0" y="1016" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="14.5" fill="#f5ebdd" fill-opacity="0.62">the required evidence was not supplied</text>
-<rect x="1133.5" y="972" width="28" height="28" fill="#E8B87A" rx="3"/>
-<text x="1147.5" y="992" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="17" fill="#1d1329" text-anchor="middle" font-weight="700">3</text>
-<text x="1173.5" y="992" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="17" fill="#f5ebdd" font-weight="600">HOLD</text>
-<text x="1133.5" y="1016" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="14.5" fill="#f5ebdd" fill-opacity="0.62">a manual criterion only the human can close</text>
-<line x1="40" y1="1040" x2="1480" y2="1040" stroke="#3F3D6C" stroke-width="1"/>
-<text x="40" y="1066" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="14.5" fill="#f5ebdd" fill-opacity="0.66">A resumed session re-enters at the node its state file names.</text>
-<text x="40" y="1087" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="14.5" fill="#f5ebdd" fill-opacity="0.66">status: live outranks every earlier node, so a finished run never re-enters Build.</text>
-<g transform="translate(1290,1056) scale(1.25)">
-<path d="M2 18 Q14 2 26 18" stroke="#5B7D73" stroke-width="2" stroke-linecap="round" fill="none"/>
-<path d="M6 18 Q14 6 22 18" stroke="rgba(245,235,221,0.30)" stroke-width="1" stroke-linecap="round" fill="none"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="690" viewBox="0 80 1600 690" role="img" aria-labelledby="hstitle hsdesc">
+<title id="hstitle">The Hyperspace Engine — five nodes, four gates, one way through</title>
+<desc id="hsdesc">A single left-to-right spine: an idea enters the acing-hyperspace primer, which routes to gear2-understand (N1), gear3-decide (N2), gear4-draft (N3) and gear5-build (N4), each exiting through a gate. The Build gate carries an extra HOLD path for undischarged manual criteria. Passing the Build gate sets status to live and enters gear6-live, a dashed no-gate stage where a human confirms before the run reaches done and ships. Above the loop, Nova Task Graph, the Verifier MCP and Caelos connect into the Draft and Build stages. Below, a state-layer rail (loop.state.json) touches every gate and carries the tests evidence and a double-back glyph for re-hash mismatches, and a small two-track diagram shows current_node halting at executing while status continues from live to done.</desc>
+<rect x="0" y="0" width="1600" height="1000" fill="#1d1329"/>
+<defs>
+<pattern id="grid" width="28" height="28" patternUnits="userSpaceOnUse"><path d="M 28 0 L 0 0 0 28" fill="none" stroke="rgba(63,61,108,0.11)" stroke-width="1"/></pattern>
+</defs>
+<rect x="0" y="0" width="1600" height="1000" fill="url(#grid)"/>
+<path d="M 62.0 414.0 L 64.6 421.4 L 72.0 424.0 L 64.6 426.6 L 62.0 434.0 L 59.4 426.6 L 52.0 424.0 L 59.4 421.4 Z" fill="#f5ebdd"/>
+<text x="62.0" y="460.0" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="19" fill="#f5ebdd" text-anchor="middle" font-weight="600">idea</text>
+<circle cx="36.0" cy="408.0" r="3.2" fill="none" stroke="#f5ebdd" stroke-width="1.3" opacity="0.55"/>
+<path d="M 30.0 421.0 Q 36.0 411.0 42.0 421.0" fill="none" stroke="#f5ebdd" stroke-width="1.3" stroke-linecap="round" opacity="0.55"/>
+<line x1="84.0" y1="430.0" x2="91.0" y2="430.0" stroke="#3F3D6C" stroke-width="1.4"/>
+<path d="M 88.5 424.5 L 97.8 430.0 L 88.5 435.5 Z" fill="#6C607D"/>
+<path d="M 159.0 409.0 L 174.0 424.0 L 159.0 439.0 L 144.0 424.0 Z" fill="#1a1828" stroke="#6E78B0" stroke-width="1.5"/>
+<circle cx="159.0" cy="424.0" r="3" fill="#6E78B0"/>
+<text x="159.0" y="462.0" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="13" fill="#6E78B0" text-anchor="middle">acing-hyperspace</text>
+<line x1="220.0" y1="430.0" x2="227.0" y2="430.0" stroke="#3F3D6C" stroke-width="1.4"/>
+<path d="M 224.5 424.5 L 233.8 430.0 L 224.5 435.5 Z" fill="#6C607D"/>
+<rect x="234.0" y="280.0" width="226.0" height="300.0" rx="6" fill="#1a1828" stroke="#3F3D6C" stroke-width="1"/>
+<rect x="234.0" y="280.0" width="226.0" height="3.0" fill="#3F3D6C"/>
+<text x="250.0" y="306.0" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="12" fill="#6E78B0" text-anchor="start" letter-spacing="0.14em">N1</text>
+<text x="250.0" y="338.0" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="20" fill="#f5ebdd" text-anchor="start" font-weight="600">gear2-understand</text>
+<line x1="250.0" y1="352.0" x2="444.0" y2="352.0" stroke="#3F3D6C" stroke-width="1" stroke-opacity="0.7"/>
+<text x="250.0" y="376.0" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="13" fill="#f5ebdd" text-anchor="start" fill-opacity="0.58">· triage</text>
+<text x="250.0" y="395.0" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="13" fill="#f5ebdd" text-anchor="start" fill-opacity="0.58">· problem-depth</text>
+<text x="250.0" y="414.0" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="13" fill="#f5ebdd" text-anchor="start" fill-opacity="0.58">· test-writing</text>
+<line x1="250.0" y1="439.0" x2="444.0" y2="439.0" stroke="#3F3D6C" stroke-width="1" stroke-opacity="0.5"/>
+<text x="250.0" y="463.0" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="12.5" fill="#f5ebdd" text-anchor="start" fill-opacity="0.82">Problem.md</text>
+<text x="250.0" y="481.0" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="12.5" fill="#f5ebdd" text-anchor="start" fill-opacity="0.82">tests.json</text>
+<rect x="490.0" y="280.0" width="226.0" height="300.0" rx="6" fill="#1a1828" stroke="#3F3D6C" stroke-width="1"/>
+<rect x="490.0" y="280.0" width="226.0" height="3.0" fill="#3F3D6C"/>
+<text x="506.0" y="306.0" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="12" fill="#6E78B0" text-anchor="start" letter-spacing="0.14em">N2</text>
+<text x="506.0" y="338.0" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="20" fill="#f5ebdd" text-anchor="start" font-weight="600">gear3-decide</text>
+<line x1="506.0" y1="352.0" x2="700.0" y2="352.0" stroke="#3F3D6C" stroke-width="1" stroke-opacity="0.7"/>
+<text x="506.0" y="376.0" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="13" fill="#f5ebdd" text-anchor="start" fill-opacity="0.58">· option-generation</text>
+<text x="506.0" y="395.0" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="13" fill="#f5ebdd" text-anchor="start" fill-opacity="0.58">· architecture-sketch</text>
+<text x="506.0" y="414.0" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="13" fill="#f5ebdd" text-anchor="start" fill-opacity="0.58">· ruthless-descoping</text>
+<line x1="506.0" y1="439.0" x2="700.0" y2="439.0" stroke="#3F3D6C" stroke-width="1" stroke-opacity="0.5"/>
+<text x="506.0" y="463.0" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="12.5" fill="#f5ebdd" text-anchor="start" fill-opacity="0.82">Decision.md</text>
+<rect x="746.0" y="280.0" width="226.0" height="300.0" rx="6" fill="#1a1828" stroke="#3F3D6C" stroke-width="1"/>
+<rect x="746.0" y="280.0" width="226.0" height="3.0" fill="#3F3D6C"/>
+<text x="762.0" y="306.0" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="12" fill="#6E78B0" text-anchor="start" letter-spacing="0.14em">N3</text>
+<text x="762.0" y="338.0" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="20" fill="#f5ebdd" text-anchor="start" font-weight="600">gear4-draft</text>
+<line x1="762.0" y1="352.0" x2="956.0" y2="352.0" stroke="#3F3D6C" stroke-width="1" stroke-opacity="0.7"/>
+<text x="762.0" y="376.0" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="13" fill="#f5ebdd" text-anchor="start" fill-opacity="0.58">· prd-writing</text>
+<text x="762.0" y="395.0" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="13" fill="#f5ebdd" text-anchor="start" fill-opacity="0.58">· plan-writing</text>
+<text x="762.0" y="414.0" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="13" fill="#f5ebdd" text-anchor="start" fill-opacity="0.58">· taskgraph-emit</text>
+<line x1="762.0" y1="439.0" x2="956.0" y2="439.0" stroke="#3F3D6C" stroke-width="1" stroke-opacity="0.5"/>
+<text x="762.0" y="463.0" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="12.5" fill="#f5ebdd" text-anchor="start" fill-opacity="0.82">PRD.md  ·  Plan.md</text>
+<rect x="1002.0" y="280.0" width="226.0" height="300.0" rx="6" fill="#1a1828" stroke="#3F3D6C" stroke-width="1"/>
+<rect x="1002.0" y="280.0" width="226.0" height="3.0" fill="#3F3D6C"/>
+<text x="1018.0" y="306.0" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="12" fill="#6E78B0" text-anchor="start" letter-spacing="0.14em">N4</text>
+<text x="1018.0" y="338.0" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="20" fill="#f5ebdd" text-anchor="start" font-weight="600">gear5-build</text>
+<line x1="1018.0" y1="352.0" x2="1212.0" y2="352.0" stroke="#3F3D6C" stroke-width="1" stroke-opacity="0.7"/>
+<text x="1018.0" y="376.0" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="13" fill="#f5ebdd" text-anchor="start" fill-opacity="0.58">· subagent-dispatch</text>
+<text x="1018.0" y="395.0" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="13" fill="#f5ebdd" text-anchor="start" fill-opacity="0.58">· tdd</text>
+<text x="1018.0" y="414.0" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="13" fill="#f5ebdd" text-anchor="start" fill-opacity="0.58">· worktree</text>
+<line x1="1018.0" y1="439.0" x2="1212.0" y2="439.0" stroke="#3F3D6C" stroke-width="1" stroke-opacity="0.5"/>
+<text x="1018.0" y="463.0" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="12.5" fill="#f5ebdd" text-anchor="start" fill-opacity="0.82">BUILD_LEDGER.md</text>
+<text x="1018.0" y="481.0" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="12.5" fill="#f5ebdd" text-anchor="start" fill-opacity="0.82">RECONCILIATION.md</text>
+<circle cx="475.0" cy="430.0" r="13" fill="#5B7D73"/>
+<path d="M 469.0 430.0 L 473.5 434.5 L 481.5 425.0" fill="none" stroke="#1a1828" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="731.0" cy="430.0" r="13" fill="#5B7D73"/>
+<path d="M 725.0 430.0 L 729.5 434.5 L 737.5 425.0" fill="none" stroke="#1a1828" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="987.0" cy="430.0" r="13" fill="#5B7D73"/>
+<path d="M 981.0 430.0 L 985.5 434.5 L 993.5 425.0" fill="none" stroke="#1a1828" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="1243.0" cy="430.0" r="13" fill="#5B7D73"/>
+<path d="M 1237.0 430.0 L 1241.5 434.5 L 1249.5 425.0" fill="none" stroke="#1a1828" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="1243.0" cy="454.0" r="7" fill="#1d1329" stroke="#E8B87A" stroke-width="1.3"/>
+<rect x="1240.2" y="451.0" width="1.6" height="6.0" fill="#E8B87A"/>
+<rect x="1244.2" y="451.0" width="1.6" height="6.0" fill="#E8B87A"/>
+<line x1="460.0" y1="430.0" x2="462.0" y2="430.0" stroke="#3F3D6C" stroke-width="1.4"/>
+<line x1="716.0" y1="430.0" x2="718.0" y2="430.0" stroke="#3F3D6C" stroke-width="1.4"/>
+<line x1="972.0" y1="430.0" x2="974.0" y2="430.0" stroke="#3F3D6C" stroke-width="1.4"/>
+<line x1="1228.0" y1="430.0" x2="1230.0" y2="430.0" stroke="#3F3D6C" stroke-width="1.4"/>
+<line x1="488.0" y1="430.0" x2="490.0" y2="430.0" stroke="#3F3D6C" stroke-width="1.4"/>
+<line x1="744.0" y1="430.0" x2="746.0" y2="430.0" stroke="#3F3D6C" stroke-width="1.4"/>
+<line x1="1000.0" y1="430.0" x2="1002.0" y2="430.0" stroke="#3F3D6C" stroke-width="1.4"/>
+<circle cx="1243.0" cy="474.0" r="3.2" fill="none" stroke="#E8B87A" stroke-width="1.3" opacity="0.85"/>
+<path d="M 1237.0 487.0 Q 1243.0 477.0 1249.0 487.0" fill="none" stroke="#E8B87A" stroke-width="1.3" stroke-linecap="round" opacity="0.85"/>
+<rect x="1258.0" y="280.0" width="150.0" height="300.0" rx="6" fill="#1a1828" stroke="#E8B87A" stroke-width="1.3" stroke-dasharray="5 4"/>
+<rect x="1258.0" y="280.0" width="150.0" height="3.0" fill="#E8B87A"/>
+<text x="1271.0" y="306.0" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="11.5" fill="#E8B87A" text-anchor="start" font-weight="700" letter-spacing="0.14em">STAGE</text>
+<text x="1271.0" y="339.0" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="18.5" fill="#f5ebdd" text-anchor="start" font-weight="600">gear6-live</text>
+<line x1="1271.0" y1="353.0" x2="1395.0" y2="353.0" stroke="#3F3D6C" stroke-width="1" stroke-opacity="0.7"/>
+<text x="1271.0" y="379.0" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="12.5" fill="#E8B87A" text-anchor="start" fill-opacity="0.9">status: live</text>
+<line x1="1258.0" y1="430.0" x2="1258.0" y2="430.0" stroke="#3F3D6C" stroke-width="1.4"/>
+<circle cx="1456.0" cy="424.0" r="13" fill="none" stroke="#E8B87A" stroke-width="1.6"/>
+<path d="M 1450.0 424.0 L 1454.5 428.5 L 1462.5 419.0" fill="none" stroke="#E8B87A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="1456.0" y="462.0" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="15" fill="#E8B87A" text-anchor="middle" font-weight="600">confirm</text>
+<circle cx="1456.0" cy="390.0" r="3.2" fill="none" stroke="#E8B87A" stroke-width="1.3" opacity="0.85"/>
+<path d="M 1450.0 403.0 Q 1456.0 393.0 1462.0 403.0" fill="none" stroke="#E8B87A" stroke-width="1.3" stroke-linecap="round" opacity="0.85"/>
+<line x1="1408.0" y1="430.0" x2="1427.0" y2="430.0" stroke="#3F3D6C" stroke-width="1.4"/>
+<path d="M 1424.5 424.5 L 1433.8 430.0 L 1424.5 435.5 Z" fill="#6C607D"/>
+<line x1="1478.0" y1="430.0" x2="1501.0" y2="430.0" stroke="#3F3D6C" stroke-width="1.4"/>
+<path d="M 1498.5 424.5 L 1507.8 430.0 L 1498.5 435.5 Z" fill="#6C607D"/>
+<path d="M 1523.0 424.0 L 1533.0 418.0 L 1543.0 424.0 L 1543.0 434.0 L 1523.0 434.0 Z" fill="none" stroke="#5B7D73" stroke-width="1.6" stroke-linejoin="round"/>
+<path d="M 1523.0 424.0 L 1533.0 430.0 L 1543.0 424.0" fill="none" stroke="#5B7D73" stroke-width="1.6" stroke-linejoin="round"/>
+<text x="1533.0" y="462.0" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="17" fill="#5B7D73" text-anchor="middle" font-weight="600">shipped</text>
+<rect x="678.0" y="108.0" width="210.0" height="68.0" rx="6" fill="#1a1828" stroke="#3F3D6C" stroke-width="1"/>
+<text x="692.0" y="136.0" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="15" fill="#f5ebdd" text-anchor="start" font-weight="600">Nova Task Graph</text>
+<text x="692.0" y="157.0" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="12.5" fill="#6E78B0" text-anchor="start" fill-opacity="0.9">via nova-caelum-ops</text>
+<rect x="1014.0" y="108.0" width="210.0" height="68.0" rx="6" fill="#1a1828" stroke="#3F3D6C" stroke-width="1"/>
+<text x="1028.0" y="136.0" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="15" fill="#f5ebdd" text-anchor="start" font-weight="600">Verifier MCP</text>
+<text x="1028.0" y="157.0" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="12.5" fill="#6E78B0" text-anchor="start" fill-opacity="0.9">nova-caelum-verifier</text>
+<rect x="1350.0" y="108.0" width="210.0" height="68.0" rx="6" fill="#1a1828" stroke="#3F3D6C" stroke-width="1"/>
+<text x="1364.0" y="136.0" font-family="'Helvetica Neue',Helvetica,Arial,'Segoe UI',sans-serif" font-size="15" fill="#f5ebdd" text-anchor="start" font-weight="600">Caelos</text>
+<text x="1364.0" y="157.0" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="12.5" fill="#6E78B0" text-anchor="start" fill-opacity="0.9">console · human</text>
+<polyline points="783.0,176.0 783.0,196.0 859.0,196.0 859.0,280.0" fill="none" stroke="#3F3D6C" stroke-width="1.3" stroke-dasharray="3 4" stroke-opacity="0.85"/>
+<polyline points="859.0,196.0 1030.0,196.0 1030.0,280.0" fill="none" stroke="#3F3D6C" stroke-width="1.3" stroke-dasharray="3 4" stroke-opacity="0.85"/>
+<polyline points="1119.0,176.0 1119.0,216.0 1115.0,216.0 1115.0,280.0" fill="none" stroke="#3F3D6C" stroke-width="1.3" stroke-dasharray="3 4" stroke-opacity="0.85"/>
+<polyline points="1455.0,176.0 1455.0,236.0 1243.0,236.0 1243.0,417.0" fill="none" stroke="#3F3D6C" stroke-width="1.3" stroke-dasharray="3 4" stroke-opacity="0.85"/>
+<line x1="234.0" y1="610.0" x2="1258.0" y2="610.0" stroke="#3F3D6C" stroke-width="1.6"/>
+<text x="234.0" y="600.0" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="13" fill="#f5ebdd" text-anchor="start" fill-opacity="0.85">loop.state.json</text>
+<line x1="475.0" y1="580.0" x2="475.0" y2="610.0" stroke="#3F3D6C" stroke-width="1" stroke-dasharray="2 5" stroke-opacity="0.7"/>
+<circle cx="475.0" cy="610.0" r="3" fill="#f5ebdd"/>
+<line x1="731.0" y1="580.0" x2="731.0" y2="610.0" stroke="#3F3D6C" stroke-width="1" stroke-dasharray="2 5" stroke-opacity="0.7"/>
+<circle cx="731.0" cy="610.0" r="3" fill="#f5ebdd"/>
+<line x1="987.0" y1="580.0" x2="987.0" y2="610.0" stroke="#3F3D6C" stroke-width="1" stroke-dasharray="2 5" stroke-opacity="0.7"/>
+<circle cx="987.0" cy="610.0" r="3" fill="#f5ebdd"/>
+<line x1="1243.0" y1="580.0" x2="1243.0" y2="610.0" stroke="#3F3D6C" stroke-width="1" stroke-dasharray="2 5" stroke-opacity="0.7"/>
+<circle cx="1243.0" cy="610.0" r="3" fill="#f5ebdd"/>
+<path d="M 371.0 602.0 A 9 9 0 1 0 371.0 618.0" fill="none" stroke="#6C607D" stroke-width="1.5" stroke-linecap="round"/>
+<path d="M 371.0 618.0 L 366.0 615.0 M 371.0 618.0 L 367.5 621.5" fill="none" stroke="#6C607D" stroke-width="1.5" stroke-linecap="round"/>
+<line x1="565.0" y1="610.0" x2="565.0" y2="626.0" stroke="#3F3D6C" stroke-width="1" stroke-dasharray="2 4"/>
+<rect x="530.0" y="626.0" width="70.0" height="26.0" rx="5" fill="#1a1828" stroke="#5B7D73" stroke-width="1"/>
+<path d="M 540.0 639.0 L 545.0 644.0 L 554.0 634.0" fill="none" stroke="#5B7D73" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="560.0" y="644.0" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="12" fill="#5B7D73" text-anchor="start" fill-opacity="0.95">tests/</text>
+<text x="1002.0" y="666.0" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="13" fill="#6E78B0" text-anchor="start" fill-opacity="0.9">current_node</text>
+<line x1="1002.0" y1="680.0" x2="1258.0" y2="680.0" stroke="#f5ebdd" stroke-width="1.6" stroke-opacity="0.5"/>
+<circle cx="1002.0" cy="680.0" r="4" fill="#f5ebdd"/>
+<circle cx="1258.0" cy="680.0" r="5" fill="#1d1329" stroke="#f5ebdd" stroke-width="1.8"/>
+<text x="1262.0" y="708.0" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="13" fill="#6E78B0" text-anchor="start" fill-opacity="0.9">status</text>
+<line x1="1278.0" y1="722.0" x2="1533.0" y2="722.0" stroke="#6C607D" stroke-width="1.6" stroke-opacity="0.7"/>
+<circle cx="1278.0" cy="722.0" r="4.5" fill="#E8B87A"/>
+<text x="1278.0" y="740.0" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="11" fill="#E8B87A" text-anchor="middle">live</text>
+<circle cx="1456.0" cy="722.0" r="4.5" fill="#5B7D73"/>
+<text x="1456.0" y="740.0" font-family="'SFMono-Regular',Menlo,Consolas,'DejaVu Sans Mono','Liberation Mono',monospace" font-size="11" fill="#5B7D73" text-anchor="middle">done</text>
+<g transform="translate(1540,736) scale(1.15)">
+<path d="M2 18 Q14 2 26 18" fill="none" stroke="#5B7D73" stroke-width="2" stroke-linecap="round"/>
+<path d="M6 18 Q14 6 22 18" fill="none" stroke="rgba(245,235,221,0.30)" stroke-width="1" stroke-linecap="round"/>
 </g>
-<text x="1480" y="1077" font-family="Georgia,'Iowan Old Style','Palatino Linotype','Book Antiqua',serif" font-size="17" fill="#f5ebdd" fill-opacity="0.7" text-anchor="end">Nova Caelum &amp; Co.</text>
 </svg>

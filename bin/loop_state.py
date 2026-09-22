@@ -66,6 +66,7 @@ if str(HERE) not in sys.path:
 
 import loop_terminal  # noqa: E402 — single source for LOOP_STATUS/LEGITIMATE_TERMINAL (T3.5)
 import node_gates  # noqa: E402 — T4.8 node exit-gate check registry, consulted by gate-pass
+import drive_map  # noqa: E402 — run-folder schema + generated DRIVE_MAP.md, rewritten by set-node and gate-pass
 
 # Re-exported for backward compatibility — LOOP_STATUS/LEGITIMATE_TERMINAL
 # used to live here (T3.1); T3.5 moved the definitions to loop_terminal.py
@@ -552,6 +553,7 @@ def _cmd_init(args: argparse.Namespace) -> int:
         original_input=original_input,
         framework_version=args.framework_version,
     )
+    _refresh_drive_map(str(state.path))  # skeleton folders + first DRIVE_MAP.md from the first minute
     print(str(state.path))
     return 0
 
@@ -562,9 +564,25 @@ def _cmd_read(args: argparse.Namespace) -> int:
     return 0
 
 
+def _refresh_drive_map(state_path: str) -> bool:
+    """Rewrite `<run-dir>/DRIVE_MAP.md` from the disk. The state file sits at
+    the run root (`LoopState.init`), so its parent IS the run folder. Called at
+    node entry (`set-node`) and at every passing gate (`gate-pass`), which is
+    what makes "the map matches the drive" true at both ends of every node
+    without anyone remembering to update it. Schema strays are reported to
+    stderr, never refused (v1). False = the map could not be written."""
+    try:
+        drive_map.report_stray(drive_map.write(Path(state_path).resolve().parent))
+    except OSError as exc:
+        print(f"drive map could not be written: {exc}", file=sys.stderr)
+        return False
+    return True
+
+
 def _cmd_set_node(args: argparse.Namespace) -> int:
     state = LoopState.load(args.path)
     state.set_node(args.node)
+    _refresh_drive_map(args.path)  # entry-side refresh; a failure here is reported, not fatal
     print(json.dumps(state.data, indent=2, sort_keys=True))
     return 0
 
@@ -610,6 +628,14 @@ def _cmd_gate_pass(args: argparse.Namespace) -> int:
         print("gate-pass --node specifying requires --plan PATH (T4.5)", file=sys.stderr)
         return 2
 
+    if any(Path(a).name == drive_map.MAP_FILENAME for a in args.artifact or []):
+        print(
+            f"gate-pass refuses --artifact {drive_map.MAP_FILENAME}: the drive map is regenerated "
+            "at every node entry and gate, so freezing it would read as a double-back at the next one",
+            file=sys.stderr,
+        )
+        return 2
+
     if not args.artifact:
         print(
             f"gate-pass refuses node {args.node!r}: empty --artifact list — an exit that "
@@ -641,6 +667,11 @@ def _cmd_gate_pass(args: argparse.Namespace) -> int:
         for message in result.messages:
             print(message, file=sys.stderr)
         return 3 if result.hold else 1
+
+    # Exit-side refresh, BEFORE anything is frozen: a gate that passes leaves a
+    # map that matches the drive, or it does not pass.
+    if not _refresh_drive_map(args.path):
+        return 1
 
     state = LoopState.load(args.path)
     gate_pass(state, node=args.node, artifact_paths=args.artifact, frozen_by=args.by)
