@@ -12,7 +12,7 @@ version: 1.0
 
 **Parent node:** `gear5-build`
 **Invocable:** No. Reached only by its parent node.
-**Emits:** `<run-dir>/build/<row>/brief.md` (on disk before the `Agent` call) · `Row <id>: dispatched …` in `BUILD_LEDGER.md` · the report path the implementer writes to
+**Emits:** `<run-dir>/build/<row>/brief.md` (on disk before the `Agent` call) · `Row <id>: dispatched …` in `BUILD_LEDGER.md` · `<run-dir>/build/<row>/report.md`, written by the controller from the report the implementer returns
 
 ## Overview
 
@@ -34,15 +34,15 @@ Turns one workplan row into one dispatch: a brief on disk that is the implemente
 
 Dispatch one row.
 
-1. Read back the row's typed criteria. Any criterion that cannot discharge as written — a `<placeholder>` in a path, `exists` on a path already present, a `command_check` target not literal from the `_agentOS` cwd — is repaired FIRST through the sync update door (`upsert_work_item … update_acceptance_criteria: true`) and confirmed with `get_work_item`. Only then continue.
+1. Read back the row's typed criteria. Any criterion that cannot discharge as written — a `<placeholder>` in a path, `exists` on a path already present, a `command_check` target that is not vault-relative WITH the repo prefix (`_agentOS/…`, `AgentSecretBase/…` — the verifier resolves `target` from the vault root, never from a repo cwd) — is repaired FIRST through the sync update door (`upsert_work_item … update_acceptance_criteria: true`) and confirmed with `get_work_item`. Only then continue.
 2. Record `BASE=$(git rev-parse HEAD)` in the repository the row touches; write it into the brief.
-3. Write `<run-dir>/build/<row>/brief.md` from the template: anchor docs, locked decisions, the `Isolation:` line, trigger tokens (`TDD`, `verification-before-completion`), the criteria verbatim, other in-flight rows' files as out of scope, the report path `<run-dir>/build/<row>/report.md`, the return cap, the escalation table. Exact values appear in the brief and nowhere else.
+3. Write `<run-dir>/build/<row>/brief.md` from the template: anchor docs, locked decisions, the `Isolation:` line, trigger tokens (`TDD`, `verification-before-completion`), the criteria verbatim, other in-flight rows' files as out of scope, the report format (returned as the implementer's final message — never a file; the harness refuses subagent report files), the return cap (it binds the status line, not the report body), the escalation table. Exact values appear in the brief and nowhere else.
 4. Choose the model by the row: one or two files with a complete spec → cheapest tier; multi-file integration → standard; design judgment → most capable. Name it in the `Agent` call — an omitted model inherits the controller's.
-5. Dispatch ONE implementer: `Agent(subagent_type=<row's assignee_agent>, model=<named>, isolation="worktree" only when the ruling says so)`. The message is a pointer — one line on where the row fits, the brief path introduced as "read this first — it is your requirements", interfaces from earlier rows the brief cannot know, the report path. No pasted history. Never two implementers on overlapping files; several same-shape one-line rows go into ONE brief.
+5. Dispatch ONE implementer: `Agent(subagent_type=<row's assignee_agent>, model=<named>, isolation="worktree" only when the ruling says so)`. The message is a pointer — one line on where the row fits, the brief path introduced as "read this first — it is your requirements", interfaces from earlier rows the brief cannot know, the instruction to return the report as the final message. No pasted history. Never two implementers on overlapping files; several same-shape one-line rows go into ONE brief.
 6. Append `Row <id>: dispatched (brief <path>, model <m>, base <sha7>)` to the ledger. Keep working — next brief, ledger, reading reports; never poll.
-7. Handle the return by status. `DONE` → read the report's `## RED`/`## GREEN`, hand to the node's closure step. `DONE_WITH_CONCERNS` → correctness or scope concerns are resolved before closure; observations are ledgered. `NEEDS_CONTEXT` → add the missing context to the brief, re-dispatch. `BLOCKED` → change something — context, model tier, a split, or a ledgered ruling on a plan defect — before any re-dispatch. Never the same dispatch twice.
+7. Handle the return by status. FIRST, before any other tool call, write the returned report verbatim to `<run-dir>/build/<row>/report.md` — a return that is not on disk is lost, and a missing report reads exactly like a missing agent. `DONE` → read the report's `## RED`/`## GREEN`, hand to the node's closure step. `DONE_WITH_CONCERNS` → correctness or scope concerns are resolved before closure; observations are ledgered. `NEEDS_CONTEXT` → add the missing context to the brief, re-dispatch. `BLOCKED` → change something — context, model tier, a split, or a ledgered ruling on a plan defect — before any re-dispatch. Never the same dispatch twice.
 
-**Acceptance:** brief on disk before the `Agent` call; model named; one implementer per file set; ledger line present; the report file exists after the return.
+**Acceptance:** brief on disk before the `Agent` call; model named; one implementer per file set; ledger line present; the controller has written the report file before its next tool call.
 
 ### Out of scope
 
@@ -70,7 +70,7 @@ Dispatch one row.
 
 ## Gate contribution
 
-Indirect, load-bearing: the report path this dispatch names is where `demi-build-tdd`'s RED/GREEN evidence lands, and the node refuses `complete_workitem` on a row whose report lacks it. The gate itself (`gate-pass --node executing`) reads only verifier files.
+Indirect, load-bearing: the report file this dispatch's controller writes is where `demi-build-tdd`'s RED/GREEN evidence lands, and the node refuses `complete_workitem` on a row whose report lacks it. The gate itself (`gate-pass --node executing`) reads only verifier files.
 
 ## Common Rationalizations
 

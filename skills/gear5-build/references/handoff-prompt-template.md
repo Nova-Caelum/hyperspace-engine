@@ -21,7 +21,7 @@ Ported from `sprint-manager/references/handoff-prompt-template.md` (internal). E
 
 ## Your task
 
-[One paragraph of goal.] Then numbered imperative steps. Step 1 is always the pre-flight (clean tree, baseline command green or reported red). Then the row's typed acceptance criteria, quoted verbatim, as the acceptance list — exact values (names, paths, strings) appear here and nowhere else.
+[One paragraph of goal.] Then numbered imperative steps. Step 1 is always the pre-flight (`git fetch`; the tree matches this brief's dirt list — the paths allowed to be dirty, and by whom — never "clean tree"; baseline command green or reported red). Then the row's typed acceptance criteria, quoted verbatim, as the acceptance list — exact values (names, paths, strings) appear here and nowhere else.
 
 ## Out of scope
 
@@ -31,13 +31,13 @@ Ported from `sprint-manager/references/handoff-prompt-template.md` (internal). E
 
 ## Deliverable format
 
-- **Writes:** [concrete paths] + the report file `[run-dir]/build/[external_id]/report.md` — contains the RED run output (test failing for the expected reason), the GREEN run output, the commands run, and concerns
-- **Returns (≤150 words):** status `DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED`, files touched, one-line test summary, concerns
+- **Writes:** [concrete paths] — code and tests only. Do NOT write a report file; the harness refuses subagent report files.
+- **Returns:** a status line (≤150 words) — status `DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED`, files touched, one-line test summary, concerns — then the full report, uncapped: `## RED` (the test failing for the expected reason), `## GREEN`, the commands run, concerns. The controller writes it to `[run-dir]/build/[external_id]/report.md`.
 - **Worklog:** one `append_worklog` (author = your persona, project = [project code], tags `[run-slug]`, `loop-run`, `[external_id]`; summary ≤280 chars) before returning
 
 ## Escalate if
 
-- [Concrete halt condition] → return `BLOCKED` with [what to write to the report]; do NOT [the workaround you must not take]
+- [Concrete halt condition] → return `BLOCKED` with [what to put in the returned report]; do NOT [the workaround you must not take]
 - A typed criterion cannot be discharged as written → return `NEEDS_CONTEXT` naming it; do NOT reshape the work to fit a broken criterion
 - The task needs an irreversible or destructive step, a security-sensitive action, or a side effect outside the workspace → stop and return; the controller rules
 ```
@@ -47,7 +47,7 @@ Ported from `sprint-manager/references/handoff-prompt-template.md` (internal). E
 ## Quality criteria
 
 - **Self-contained.** A fresh subagent reading only the brief and its anchor docs has everything. No "as we discussed".
-- **Concrete paths.** "Write to `<run-dir>/build/<row>/report.md`" — never "document your work".
+- **Concrete paths and returns.** "Write the test to `[exact path]`; return `## RED` and `## GREEN` with pasted output" — never "document your work".
 - **Exact values live in the brief only.** Never in the dispatch message, never in a pasted summary of earlier rows. A real upstream session's dispatch reached 42k characters of which 99% was pasted history.
 - **Locked decisions are named.** "Do NOT re-open D11–D13" — not implied.
 - **Halt conditions are typed.** Trigger → return status → what not to do meanwhile.

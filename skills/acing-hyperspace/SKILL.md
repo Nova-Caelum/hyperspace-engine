@@ -35,7 +35,7 @@ Process before implementation. When the work has a shape the loop recognizes, th
 | Rows filed, software owed — "build it", "execute the plan", "run the rows"; the run reads `current_node: specifying`, gate passed, or a `BUILD_LEDGER.md` has rows not yet `complete` | `gear5-build` |
 | Build finished, Daniel's test owed — the run reads `status: live`, or the Build gate just exited 0 | `gear6-live` |
 
-Between two nodes, enter the earlier one: hidden complexity upgrades forward; nothing downgrades mid-task. `status: live` outranks every row above it: a finished run never re-enters Build. Ceremony scales with the task; the gate never does. A failure whose cause is known is debugging, not a node; a value inside a filed row belongs to Build, not to a new run.
+Between two nodes, enter the earlier one: hidden complexity upgrades forward; nothing downgrades mid-task. Route by the work's own run, never another run's banner line; there, `status: live` outranks every row above it: a finished run never re-enters Build. Ceremony scales with the task; the gate never does. A failure whose cause is known is debugging, not a node; a value inside a filed row belongs to Build, not to a new run.
 
 <!-- END ROUTING BLOCK -->
 
