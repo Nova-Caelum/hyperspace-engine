@@ -1,5 +1,9 @@
 # Hyperspace Engine
 
+[![pytest](https://github.com/Nova-Caelum/hyperspace-engine/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Nova-Caelum/hyperspace-engine/actions/workflows/ci.yml)
+
+CI runs `pytest tests/` on every push and pull request to `main`.
+
 **A five-node development loop that runs inside [Claude Code](https://claude.com/claude-code), with one-way evidence-bearing gates between the nodes.**
 
 An agent cannot decide it is finished. That is the problem this solves.
