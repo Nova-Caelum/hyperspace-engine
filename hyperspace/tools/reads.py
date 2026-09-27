@@ -2,7 +2,9 @@
 items, over the store (row T2.2)."""
 from __future__ import annotations
 
-from ._config import read_judge
+from pathlib import Path
+
+from ..config import load_config
 from ..store import Store
 from .registry import ToolError
 
@@ -218,11 +220,13 @@ def list_initiatives(store: Store, *, state: str | list[str] | None = None) -> l
 # ── agents (local stub) ──────────────────────────────────────────────────
 
 def list_agents(store: Store) -> list[dict]:
-    """Local stub: returns the configured judge — read from
-    `.hyperspace/config.toml` beside the open database file, if present — as
-    the only agent."""
-    config_path = store.path.parent / "config.toml"
-    judge = read_judge(config_path)
+    """Local stub: returns the configured judge — read via
+    `hyperspace.config.load_config` from the project root (the directory
+    holding the open database's `.hyperspace/`), if present — as the only
+    agent."""
+    db_path = Path(store.path).resolve()
+    project_dir = db_path.parent.parent if db_path.parent.name == ".hyperspace" else Path.cwd().resolve()
+    judge = load_config(project_dir).judge
     return [{
         "agent_name": judge,
         "harness": "hyperspace",
