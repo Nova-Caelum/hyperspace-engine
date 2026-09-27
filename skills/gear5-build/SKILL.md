@@ -68,7 +68,7 @@ If you catch yourself thinking:
 - "The brief names a different process" → the brief is stale; the node is not. (This run, 2026-09-07T00:50Z: `mandatory sprint-manager`.)
 - "This tooling fix unblocks the row, so it's Build work" → it is not a row. File it through N3's emit or ledger it deferred; the ledger counts rows moved to `done`.
 - "I remember where we were" → read the ledger, `loop.state.json`, `git log`. Memory did not survive compaction.
-- "The subagent said DONE and the tests pass" → DONE is a report status; `done` is a verifier verdict in `run/verifications/<run_id>.json`.
+- "The subagent said DONE and the tests pass" → DONE is a report status; `done` is a verifier verdict recorded in the local store's `verifier_runs` table (or `misc/verifications/<run_id>.json` for a file-recorded run).
 - "It's six lines, I'll do it inline" → the D10 test: a mechanical consequence of a subagent's own change → patch and disclose; a row's work → dispatch.
 
 ## Common Rationalizations

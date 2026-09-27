@@ -678,6 +678,11 @@ def _cmd_gate_pass(args: argparse.Namespace) -> int:
         )
         return 1
 
+    run_dir = Path(args.path).resolve().parent
+    project_dir = node_gates.resolve_project_dir(
+        run_dir, explicit=Path(args.project_dir) if args.project_dir else None,
+    )
+
     evidence: dict[str, Any] = {}
     if args.node == "executing":
         evidence["workplan"] = Path(args.workplan)
@@ -685,10 +690,12 @@ def _cmd_gate_pass(args: argparse.Namespace) -> int:
         evidence["verifications_dir"] = (
             Path(args.verifications_dir)
             if args.verifications_dir
-            else node_gates.default_verifications_dir(Path(args.path).resolve().parent)
+            else node_gates.default_verifications_dir(run_dir)
         )
         if args.graph_snapshot:
             evidence["graph_snapshot"] = Path(args.graph_snapshot)
+        if project_dir is not None:
+            evidence["store_path"] = project_dir / ".hyperspace" / "graph.db"
     if args.node == "understanding":
         evidence["tests"] = Path(args.tests)
     if args.node == "deciding":
@@ -709,8 +716,34 @@ def _cmd_gate_pass(args: argparse.Namespace) -> int:
 
     state = LoopState.load(args.path)
     gate_pass(state, node=args.node, artifact_paths=args.artifact, frozen_by=args.by)
+    _log_gate_pass(state, node=args.node, by=args.by, project_dir=project_dir)
     print(json.dumps(state.data, indent=2, sort_keys=True))
     return 0
+
+
+def _log_gate_pass(state: "LoopState", node: str, by: str, project_dir: Path | None) -> None:
+    """Best-effort worklog entry for a passing gate (v0.1.1 item 2). Only
+    when `project_dir` resolved AND the package's store is importable —
+    otherwise a silent no-op. Never raises: this must never affect
+    `gate-pass`'s exit code or stdout contract, which are already decided by
+    the time this runs."""
+    if project_dir is None:
+        return
+    try:
+        Store = node_gates.import_store()  # noqa: N806 — mirrors import_store's own PLC0415 style
+        if Store is None:
+            return
+        slug = state.data.get("goal_slug") or state.path.parent.name
+        summary = f"{slug}: {node} gate passed"[:280]
+        store = Store.open(project_dir / ".hyperspace" / "graph.db")
+        try:
+            projects = store.list_projects()
+            project_code = projects[0]["code"] if len(projects) == 1 else None
+            store.append_worklog(author=by, summary=summary, project=project_code, tags=["gate", node])
+        finally:
+            store.close()
+    except Exception:
+        pass
 
 
 def _cmd_check(args: argparse.Namespace) -> int:
@@ -838,6 +871,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_gate_pass.add_argument(
         "--plan", default=None,
         help="T4.5: path to N3's Plan.md with task_ids backfilled by the uploader; required when --node specifying",
+    )
+    p_gate_pass.add_argument(
+        "--project-dir", default=None, dest="project_dir",
+        help=(
+            "explicit project directory (containing .hyperspace/graph.db), for "
+            "the gate-exit worklog log and, on --node executing, the local "
+            "verifier-run lookup. Resolved from the run folder otherwise; "
+            "unresolved, both are silently skipped."
+        ),
     )
     p_gate_pass.set_defaults(func=_cmd_gate_pass)
 
