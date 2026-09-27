@@ -64,7 +64,7 @@ def test_pyproject_names_and_versions():
     deps = project["dependencies"]
     joined = "\n".join(deps)
     assert "pydantic>=2.11" in joined
-    assert "pydantic-graph>=2.40" in joined
+    assert "pydantic-graph>=2.51" in joined
     assert "pydantic-ai-slim[anthropic,openrouter]>=2.40" in joined
     assert "mcp>=2.1" in joined
     assert project["optional-dependencies"]["dev"] == ["pytest>=8"]

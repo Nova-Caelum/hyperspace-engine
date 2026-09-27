@@ -10,7 +10,7 @@ requires-python = ">=3.11"
 license = "MIT"
 dependencies = [
     "pydantic>=2.11",
-    "pydantic-graph>=2.40",
+    "pydantic-graph>=2.51",
     "pydantic-ai-slim[anthropic,openrouter]>=2.40",
     "mcp>=2.1",
 ]
