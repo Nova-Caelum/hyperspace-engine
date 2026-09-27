@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT / "ui" / "dist"
 SOURCE_MD = ROOT / "ui" / "SOURCE.md"
 BUILD_SH = ROOT / "ui" / "build.sh"
-PINNED_COMMIT = "21a60c4"
+PINNED_COMMIT = "dfcb46d"
 MOCK_SENTINEL = "Foundry calibration"
 
 

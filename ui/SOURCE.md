@@ -7,17 +7,17 @@ this build.
 
 - **Repo:** `Nova-Caelum/Caelos` (public), `origin/main` at the time of this
   build.
-- **Pinned commit:** `21a60c453728cabf5fefaadbac4ff47251c6cd84` (short: `21a60c4`)
-- **Built:** 2026-09-27T01:08:51Z
+- **Pinned commit:** `dfcb46d5e0402c049122dc443b85955caf37bc8d` (short: `dfcb46d`)
+- **Built:** 2026-09-27T07:19:40Z
 - **Node:** v22.23.1
 - **npm:** 10.9.8
 - **Commands:**
   ```sh
   git clone --no-checkout <repo> <build-dir>
   cd <build-dir>
-  git checkout 21a60c4
+  git checkout dfcb46d
   npm ci
-  VITE_API_BASE_URL=. npm run build
+  VITE_API_BASE_URL=. VITE_HUMAN_OWNER=user npm run build
   ```
   (`npm run build` = `npm run build:ui && vite build` — the `@nova-caelum/ui`
   workspace package builds first via panda/tsup, then the root Vite build.)
@@ -25,10 +25,23 @@ this build.
   unmodified on any port the loopback door serves it from; an empty string
   would instead select Caelos's in-memory mock, per `src/app/App.tsx:198`'s
   `if (!API_BASE) return mockApi(...)`).
+- **`VITE_HUMAN_OWNER`:** `user` — as of `dfcb46d`, Caelos's project-owner
+  picker (`ProjectInfoTab`'s `ownerItems`) reads a build-time env var instead
+  of a hardcoded literal (`src/app/App.tsx`'s `HUMAN_OWNER` const), pinned in
+  Caelos's own `.env.production`/`.env.development` to the founder's own
+  identity so Nova's own console is unaffected. This build passes
+  `VITE_HUMAN_OWNER=user` explicitly — Vite gives an existing process-env
+  value the highest priority over `.env` files, so this build never bakes a
+  personal name into the shipped bundle regardless of what Caelos's own
+  `.env.production` pins (verified: `probes/probe_no_vault_refs.py`'s
+  denylist scan of the rebuilt `ui/` tree returns zero real findings).
+  `probes/check_ui_build.py`'s reproducibility rebuild invokes this same
+  `ui/build.sh`, so it inherits the identical env and produces a
+  byte-identical bundle — the hashes do not diverge.
 - **Bundle size:** 728K total (`du -sh ui/dist`)
 - **File count:** 4 files
 - **Largest three assets:**
-  1. `assets/index-BQL6vRNH.js` — 528K
+  1. `assets/index-Cw8nVcU0.js` — 528K
   2. `assets/index-Bka4lujK.css` — 144K
   3. `assets/nova-caelum-wordmark-transparent-wusR2g40.png` — 52K
 
@@ -58,5 +71,5 @@ Run `ui/build.sh` (optionally `--source <path-or-url>`, `--commit <sha>`,
 replace `ui/dist/` (or another `--out` directory) wholesale.
 
 **Honest caveat:** this bundle drifts from the live Caelos console the
-moment `main` moves past `21a60c4`. Re-run `ui/build.sh` (optionally with a
+moment `main` moves past `dfcb46d`. Re-run `ui/build.sh` (optionally with a
 newer `--commit`) to refresh it; nothing here refreshes automatically.
