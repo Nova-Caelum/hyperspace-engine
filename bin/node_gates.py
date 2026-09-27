@@ -50,6 +50,47 @@ def default_verifications_dir(run_dir: Path) -> Path:
     """The default verifications directory for the run at `run_dir`."""
     return Path(run_dir) / VERIFICATIONS_SUBDIR
 
+
+def resolve_project_dir(run_dir: Path, explicit: Path | None = None) -> Path | None:
+    """The project directory owning the run at `run_dir` (v0.1.1 items 2/3,
+    shared by `loop_state.py gate-pass`'s worklog log and `check_executing`'s
+    local-store lookup).
+
+    `explicit` — an `--project-dir` value — wins if given, but only if it
+    genuinely holds a store (`<dir>/.hyperspace/graph.db` exists); a wrong
+    explicit path is `None`, not a guess. Otherwise walks up from `run_dir`
+    (inclusive) through its parents, returning the first ancestor holding
+    `.hyperspace/graph.db` — the convention `<project>/hyperspace/runs/
+    <slug>/loop.state.json` resolves this way with no special-casing of that
+    exact depth. `None` if neither resolves — the caller's cue to skip
+    silently."""
+    if explicit is not None:
+        candidate = Path(explicit)
+        return candidate if (candidate / ".hyperspace" / "graph.db").exists() else None
+    run_dir = Path(run_dir)
+    for ancestor in (run_dir, *run_dir.parents):
+        if (ancestor / ".hyperspace" / "graph.db").exists():
+            return ancestor
+    return None
+
+
+def import_store() -> Any:
+    """The package's `Store` class, or `None` if it cannot be imported —
+    never raises. Mirrors `_load_contract`'s `sys.path` fallback (below),
+    but `hyperspace.store` is pure stdlib (json, sqlite3, uuid, pathlib,
+    datetime) — importing it never pulls pydantic, so this does not weaken
+    the module docstring's 'check_executing never loads pydantic'
+    invariant."""
+    try:
+        import importlib.util  # noqa: PLC0415
+
+        if importlib.util.find_spec("hyperspace") is None and str(PLUGIN_ROOT) not in sys.path:
+            sys.path.insert(0, str(PLUGIN_ROOT))
+        from hyperspace.store import Store  # noqa: PLC0415
+    except Exception:
+        return None
+    return Store
+
 #: `final_result.outcome` values that count as a passing closure (ExitGateDecision
 #: table, N4 row: `final_result.outcome in {done, already_done}`).
 _PASSING_OUTCOMES = frozenset({"done", "already_done"})
@@ -101,26 +142,53 @@ def _load_verification_file(path: Path) -> dict[str, Any] | None:
     return data
 
 
+def _store_verifications(store: Any, project: str, external_id: str) -> list[tuple[Path, dict[str, Any]]]:
+    """Every verifier run the LOCAL store holds for `(project, external_id)`,
+    as `(pseudo_path, run_dict)` pairs shaped exactly like a run FILE's
+    contents (v0.1.1 item 3). `verifier_runs.steps` holds the full
+    `VerificationState.model_dump()` — field-for-field the same shape a run
+    file carries (`hyperspace/verify/compose.py::StoreStateWriter.write`) —
+    so no adapter is needed, only a wrapper. Filters on `external_id` via
+    the store's own column, then on `project` against the PARSED `steps`
+    (not the DB's `project_code` column, which can be `None` on a
+    foreign-key-mismatch fallback — see `Store.list_verifier_runs`)."""
+    candidates: list[tuple[Path, dict[str, Any]]] = []
+    for db_row in store.list_verifier_runs(external_id):
+        run = db_row.get("steps")
+        if not isinstance(run, dict) or run.get("project") != project:
+            continue
+        candidates.append((Path(f"verifier_runs/{db_row['id']}"), run))
+    return candidates
+
+
 def _latest_verification(
-    verifications_dir: Path, project: str, external_id: str
+    verifications_dir: Path, project: str, external_id: str, store: Any = None,
 ) -> tuple[Path, dict[str, Any]] | None:
-    """The newest `*.json` under `verifications_dir` (by `updated_at`,
-    lexicographic ISO-8601 comparison) whose `external_id` and `project`
-    match. Newest wins when more than one file names the same row —
-    e.g. a `refused`/`unverifiable` attempt superseded by a later `done`
-    (handoff case d). Unreadable/non-JSON files are skipped, not fatal."""
+    """The newest verification for `(project, external_id)` (by
+    `updated_at`, lexicographic ISO-8601 comparison), drawn from run FILES
+    under `verifications_dir` and, when `store` is given, the local
+    verifier's `verifier_runs` rows too (v0.1.1 item 3) — both sources
+    compete as candidates on equal footing, so a store-recorded run and a
+    run file are judged by the same rule. Newest wins when more than one
+    candidate names the same row — e.g. a `refused`/`unverifiable` attempt
+    superseded by a later `done` (handoff case d). Unreadable/non-JSON files
+    are skipped, not fatal."""
     best: tuple[Path, dict[str, Any], str] | None = None
-    if not verifications_dir.is_dir():
-        return None
-    for path in sorted(verifications_dir.glob("*.json")):
-        data = _load_verification_file(path)
-        if data is None:
-            continue
-        if data.get("external_id") != external_id or data.get("project") != project:
-            continue
-        updated_at = str(data.get("updated_at") or "")
-        if best is None or updated_at > best[2]:
-            best = (path, data, updated_at)
+    if verifications_dir.is_dir():
+        for path in sorted(verifications_dir.glob("*.json")):
+            data = _load_verification_file(path)
+            if data is None:
+                continue
+            if data.get("external_id") != external_id or data.get("project") != project:
+                continue
+            updated_at = str(data.get("updated_at") or "")
+            if best is None or updated_at > best[2]:
+                best = (path, data, updated_at)
+    if store is not None:
+        for path, data in _store_verifications(store, project, external_id):
+            updated_at = str(data.get("updated_at") or "")
+            if best is None or updated_at > best[2]:
+                best = (path, data, updated_at)
     if best is None:
         return None
     return best[0], best[1]
@@ -344,12 +412,21 @@ def check_executing(
     verifications_dir: Path,
     reconciliation: Path,
     graph_snapshot: Path | None = None,
+    store_path: Path | None = None,
 ) -> GateResult:
     """The Build node's exit check (Step 0 of T4.8; reconciliation gate,
     T4.9/loop-ending-executing-live-done, 2026-09-17 — replaces the D2
     manual-only-HOLD narrowing the author reversed the same day: an
     undischarged `manual` verdict is a failure to tell him built work was
     ready for review, not a free pass).
+
+    `store_path` (v0.1.1 item 3), when given and openable as a `Store`, adds
+    the local verifier's `verifier_runs` rows as a second source of evidence
+    everywhere `verifications_dir` is consulted — the local verifier records
+    its runs there, not as files, so without this the manual-criterion HOLD
+    below could never fire against a local project. Unreadable/unopenable
+    `store_path` is silently ignored, falling back to file-only behaviour
+    exactly as if it had not been given.
 
     Every workplan `external_id` must carry a disposition in the
     reconciliation artifact: `done`, `deferred`, `archived`, or
@@ -410,83 +487,101 @@ def check_executing(
     any_missing_or_refused = False
     any_unverifiable = False
 
-    for external_id in external_ids:
-        disposition = dispositions.get(external_id)
-        if disposition is None:
-            messages.append(
-                f"{external_id}: no disposition in reconciliation artifact {reconciliation} "
-                "— every workplan row must be done, deferred, archived, or live-test"
-            )
-            any_missing_or_refused = True
-            continue
+    # v0.1.1 item 3: the local verifier records its runs in the store, not
+    # as files — open it once (if openable) and pass it to every
+    # `_latest_verification` call below, so file-based and store-based
+    # evidence are judged by the same rule. Unreadable/unopenable is a
+    # silent fall-back to file-only behaviour, never a crash.
+    store: Any = None
+    if store_path is not None:
+        Store = import_store()  # noqa: N806
+        if Store is not None:
+            try:
+                store = Store.open(Path(store_path))
+            except Exception:
+                store = None
 
-        if disposition == _LIVE_TEST_DISPOSITION:
-            continue  # the only disposition that may cross the gate open
-        if disposition in _SKIP_VERIFIER_DISPOSITIONS:
-            continue  # descoped work — passes without a verifier `done`
-
-        # disposition == "done" (the regex admits no other token here).
-        #
-        # With a graph snapshot, the gate asks the SOURCE OF TRUTH who
-        # closed the row instead of inferring it from local files. A
-        # committer closure still consults the verifier run below, so an
-        # undischarged `manual` criterion HOLDs exactly as the author's
-        # reversal requires. A console closure is the user's own hand: they
-        # ARE the discharge of a manual criterion, so it passes outright.
-        if graph_rows is not None:
-            ok, message = _closure_verdict(external_id, graph_rows.get(external_id))
-            if not ok:
-                messages.append(message)
+    try:
+        for external_id in external_ids:
+            disposition = dispositions.get(external_id)
+            if disposition is None:
+                messages.append(
+                    f"{external_id}: no disposition in reconciliation artifact {reconciliation} "
+                    "— every workplan row must be done, deferred, archived, or live-test"
+                )
                 any_missing_or_refused = True
                 continue
-            if message == _PRE_STAMPING:
-                # Closed before stamping existed. The label proves nothing,
-                # so the ORIGINAL evidence decides — with one carve-out: a
-                # row closed before the verifier itself existed can have no
-                # run file, ever, and refusing it would be refusing history.
-                updated_at = str((graph_rows.get(external_id) or {}).get("updated_at") or "")
-                if (
-                    _latest_verification(verifications_dir, project, external_id) is None
-                    and updated_at
-                    and updated_at < _VERIFIER_EPOCH
-                ):
+
+            if disposition == _LIVE_TEST_DISPOSITION:
+                continue  # the only disposition that may cross the gate open
+            if disposition in _SKIP_VERIFIER_DISPOSITIONS:
+                continue  # descoped work — passes without a verifier `done`
+
+            # disposition == "done" (the regex admits no other token here).
+            #
+            # With a graph snapshot, the gate asks the SOURCE OF TRUTH who
+            # closed the row instead of inferring it from local files. A
+            # committer closure still consults the verifier run below, so an
+            # undischarged `manual` criterion HOLDs exactly as the author's
+            # reversal requires. A console closure is the user's own hand: they
+            # ARE the discharge of a manual criterion, so it passes outright.
+            if graph_rows is not None:
+                ok, message = _closure_verdict(external_id, graph_rows.get(external_id))
+                if not ok:
+                    messages.append(message)
+                    any_missing_or_refused = True
                     continue
-            elif (graph_rows.get(external_id) or {}).get("completed_by") == _CONSOLE_LABEL:
+                if message == _PRE_STAMPING:
+                    # Closed before stamping existed. The label proves nothing,
+                    # so the ORIGINAL evidence decides — with one carve-out: a
+                    # row closed before the verifier itself existed can have no
+                    # run file, ever, and refusing it would be refusing history.
+                    updated_at = str((graph_rows.get(external_id) or {}).get("updated_at") or "")
+                    if (
+                        _latest_verification(verifications_dir, project, external_id, store=store) is None
+                        and updated_at
+                        and updated_at < _VERIFIER_EPOCH
+                    ):
+                        continue
+                elif (graph_rows.get(external_id) or {}).get("completed_by") == _CONSOLE_LABEL:
+                    continue
+                else:
+                    found = _latest_verification(verifications_dir, project, external_id, store=store)
+                    if found is None:
+                        continue  # committer-closed; run file simply not on this machine
+                    path, run = found
+                    if not _row_passes(run) and run.get("status") == "unverifiable":
+                        manual = _undischarged_manual_lines(external_id, run)
+                        if manual:
+                            messages.extend(manual)
+                            messages.append(
+                                f"{external_id}: verifier status is 'unverifiable' in {path.name} "
+                                "— awaiting the user's attestation (Decision D)"
+                            )
+                            any_unverifiable = True
+                    continue
+            found = _latest_verification(verifications_dir, project, external_id, store=store)
+            if found is None:
+                messages.append(f"{external_id}: no verifier run found under {verifications_dir}")
+                any_missing_or_refused = True
                 continue
+            path, run = found
+            if _row_passes(run):
+                continue
+            status = run.get("status")
+            if status == "unverifiable":
+                messages.extend(_undischarged_manual_lines(external_id, run))
+                messages.append(
+                    f"{external_id}: verifier status is 'unverifiable' in {path.name} "
+                    "— awaiting the user's attestation (Decision D)"
+                )
+                any_unverifiable = True
             else:
-                found = _latest_verification(verifications_dir, project, external_id)
-                if found is None:
-                    continue  # committer-closed; run file simply not on this machine
-                path, run = found
-                if not _row_passes(run) and run.get("status") == "unverifiable":
-                    manual = _undischarged_manual_lines(external_id, run)
-                    if manual:
-                        messages.extend(manual)
-                        messages.append(
-                            f"{external_id}: verifier status is 'unverifiable' in {path.name} "
-                            "— awaiting the user's attestation (Decision D)"
-                        )
-                        any_unverifiable = True
-                continue
-        found = _latest_verification(verifications_dir, project, external_id)
-        if found is None:
-            messages.append(f"{external_id}: no verifier run found under {verifications_dir}")
-            any_missing_or_refused = True
-            continue
-        path, run = found
-        if _row_passes(run):
-            continue
-        status = run.get("status")
-        if status == "unverifiable":
-            messages.extend(_undischarged_manual_lines(external_id, run))
-            messages.append(
-                f"{external_id}: verifier status is 'unverifiable' in {path.name} "
-                "— awaiting the user's attestation (Decision D)"
-            )
-            any_unverifiable = True
-        else:
-            messages.append(f"{external_id}: verifier status is {status!r} in {path.name} — not done")
-            any_missing_or_refused = True
+                messages.append(f"{external_id}: verifier status is {status!r} in {path.name} — not done")
+                any_missing_or_refused = True
+    finally:
+        if store is not None:
+            store.close()
 
     if not messages:
         return GateResult(ok=True, hold=False, messages=[])
@@ -919,5 +1014,7 @@ __all__ = [
     "check_understanding",
     "CHECKS",
     "default_verifications_dir",
+    "import_store",
+    "resolve_project_dir",
     "run_check",
 ]

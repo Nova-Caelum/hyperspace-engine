@@ -28,6 +28,7 @@ FORBIDDEN_TERMS = [
     "NovaCaelum_Obs",
     "AGENTOS_ROOT",
     "AgentSecretBase",
+    "_agentOS",
     "nova-caelum-ops",
     "railway.app",
     "supabase",

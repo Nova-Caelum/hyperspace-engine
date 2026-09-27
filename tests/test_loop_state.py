@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
+import os
 import subprocess
 import sys
 import tempfile
 import time
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -18,6 +21,8 @@ if str(BIN_DIR) not in sys.path:
 
 import loop_state  # noqa: E402
 import loop_terminal  # noqa: E402 — IllegalEnding, for the D1 confirm-refusal tests
+
+from hyperspace.store import Store  # noqa: E402 — v0.1.1 item 2's gate-exit worklog log
 
 SCHEMA_PATH = BIN_DIR / "loop_state.schema.json"
 SCHEMA = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
@@ -446,6 +451,311 @@ class TerminalStatusMirrorTests(unittest.TestCase):
 
         self.assertEqual(0, loop_state.bump(self.state, event="startup"))
         self.assertEqual(before, self.state.data["budget"]["fresh_sessions"]["used"])
+
+
+def _valid_tests_json() -> dict:
+    """A minimal `CandidateWorkItem`-shaped `tests.json` that clears
+    `check_understanding`'s gate: one executable criterion, one `WHOLE-PATH:`
+    criterion (the same shape as `test_port.py`'s `_candidate()`)."""
+    return {
+        "project": "demo",
+        "external_id": "demo:goal-acceptance",
+        "name": "Demo goal acceptance",
+        "type": "task",
+        "idempotency_key": "k1",
+        "specification": {
+            "problem": "The demo goal has no acceptance criteria written down anywhere yet.",
+            "why_it_matters": "Without criteria the node cannot pass its gate and design cannot start.",
+            "context_pointer": "01_understand/Problem.md in the run folder",
+        },
+        "source_references": [{"uri": "original_input.md"}],
+        "effort_level": "quick",
+        "module": None,
+        "acceptance_criteria": [{
+            "statement": "WHOLE-PATH: running the demo end to end writes out/result.txt",
+            "verification": {"kind": "file_state", "path": "out/result.txt", "assertion": "exists"},
+        }],
+        "proposer_identity": "engineer",
+        "proposer_surface": "cli",
+        "uncertainty_notes": [],
+    }
+
+
+class GatePassWorklogLogTests(unittest.TestCase):
+    """v0.1.1 item 2: `loop_state.py gate-pass` on exit 0 appends one
+    worklog row — author `--by`, summary `"<slug>: <node> gate passed"`,
+    tags `["gate", "<node>"]`, project from the run's store when
+    resolvable — only when the package's store is importable and
+    `<project>/.hyperspace/graph.db` exists (the run folder or an explicit
+    `--project-dir`); otherwise silent. Never changes gate-pass's exit code
+    or stdout contract."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+
+    def _write_tests_json(self, path: Path) -> None:
+        path.write_text(json.dumps(_valid_tests_json()), encoding="utf-8")
+
+    def _init_and_advance(self, workspace: Path, slug: str) -> Path:
+        workspace.mkdir(parents=True, exist_ok=True)
+        input_file = workspace / f"{slug}-original_input.md"
+        input_file.write_text("raw ask", encoding="utf-8")
+        init = _run_cli(
+            "init", "--goal", slug, "--input", str(input_file), "--workspace", str(workspace),
+        )
+        self.assertEqual(0, init.returncode, init.stderr)
+        state_path = workspace / slug / "loop.state.json"
+        set_node = _run_cli("set-node", str(state_path), "--node", "understanding")
+        self.assertEqual(0, set_node.returncode, set_node.stderr)
+        return state_path
+
+    def test_no_store_resolvable_skips_silently(self) -> None:
+        state_path = self._init_and_advance(self.root / "runs", "no-store-goal")
+        tests_path = self.root / "tests.json"
+        self._write_tests_json(tests_path)
+
+        result = _run_cli(
+            "gate-pass", str(state_path), "--node", "understanding",
+            "--tests", str(tests_path), "--artifact", str(tests_path), "--by", "tester",
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual("understanding", data["gates"][-1]["node"])
+
+    def test_project_dir_flag_logs_one_row_with_expected_fields(self) -> None:
+        project_dir = self.root / "project"
+        project_dir.mkdir()
+        Store.init(project_dir / ".hyperspace" / "graph.db").close()
+
+        state_path = self._init_and_advance(self.root / "runs", "flagged-goal")
+        tests_path = self.root / "tests.json"
+        self._write_tests_json(tests_path)
+
+        result = _run_cli(
+            "gate-pass", str(state_path), "--node", "understanding",
+            "--tests", str(tests_path), "--artifact", str(tests_path), "--by", "tester",
+            "--project-dir", str(project_dir),
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
+
+        store = Store.open(project_dir / ".hyperspace" / "graph.db")
+        try:
+            entries = store.search_worklog(tags=["gate"])
+            self.assertEqual(1, len(entries))
+            entry = entries[0]
+            self.assertEqual("tester", entry["author"])
+            self.assertEqual("flagged-goal: understanding gate passed", entry["summary"])
+            self.assertEqual(["gate", "understanding"], entry["tags"])
+        finally:
+            store.close()
+
+    def test_resolves_project_dir_from_run_folder_without_explicit_flag(self) -> None:
+        project_dir = self.root / "auto-project"
+        project_dir.mkdir()
+        Store.init(project_dir / ".hyperspace" / "graph.db").close()
+        runs_dir = project_dir / "hyperspace" / "runs"
+
+        state_path = self._init_and_advance(runs_dir, "auto-goal")
+        tests_path = self.root / "tests.json"
+        self._write_tests_json(tests_path)
+
+        result = _run_cli(
+            "gate-pass", str(state_path), "--node", "understanding",
+            "--tests", str(tests_path), "--artifact", str(tests_path), "--by", "tester",
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
+
+        store = Store.open(project_dir / ".hyperspace" / "graph.db")
+        try:
+            entries = store.search_worklog(tags=["gate"])
+            self.assertEqual(1, len(entries))
+        finally:
+            store.close()
+
+    def test_project_resolved_only_when_exactly_one_project_row(self) -> None:
+        project_dir = self.root / "project-code"
+        project_dir.mkdir()
+        store = Store.init(project_dir / ".hyperspace" / "graph.db")
+        store.upsert_project(code="demo-project", name="Demo")
+        store.close()
+
+        state_path = self._init_and_advance(self.root / "runs2", "project-goal")
+        tests_path = self.root / "tests.json"
+        self._write_tests_json(tests_path)
+
+        result = _run_cli(
+            "gate-pass", str(state_path), "--node", "understanding",
+            "--tests", str(tests_path), "--artifact", str(tests_path), "--by", "tester",
+            "--project-dir", str(project_dir),
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
+
+        store = Store.open(project_dir / ".hyperspace" / "graph.db")
+        try:
+            entries = store.search_worklog(tags=["gate"])
+            self.assertEqual(1, len(entries))
+            self.assertEqual("demo-project", entries[0]["project"])
+        finally:
+            store.close()
+
+    def test_store_presence_never_changes_exit_code_or_stdout_shape(self) -> None:
+        """Comparative check: with and without a resolvable store, the CLI's
+        exit code and JSON key set are identical — the log never touches the
+        gate-pass contract (brief: 'never change gate-pass's exit code or
+        stdout contract')."""
+        tests_path = self.root / "tests.json"
+        self._write_tests_json(tests_path)
+
+        state_path_a = self._init_and_advance(self.root / "runs-a", "compare-a")
+        without_store = _run_cli(
+            "gate-pass", str(state_path_a), "--node", "understanding",
+            "--tests", str(tests_path), "--artifact", str(tests_path), "--by", "tester",
+        )
+
+        project_dir = self.root / "compare-project"
+        project_dir.mkdir()
+        Store.init(project_dir / ".hyperspace" / "graph.db").close()
+        state_path_b = self._init_and_advance(self.root / "runs-b", "compare-b")
+        with_store = _run_cli(
+            "gate-pass", str(state_path_b), "--node", "understanding",
+            "--tests", str(tests_path), "--artifact", str(tests_path), "--by", "tester",
+            "--project-dir", str(project_dir),
+        )
+
+        self.assertEqual(without_store.returncode, with_store.returncode)
+        self.assertEqual(
+            set(json.loads(without_store.stdout).keys()),
+            set(json.loads(with_store.stdout).keys()),
+        )
+
+
+def _git(root: Path, *args: str, date: str | None = None) -> None:
+    env = {**os.environ, "GIT_AUTHOR_DATE": date, "GIT_COMMITTER_DATE": date} if date else None
+    subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", *args],
+        cwd=root, check=True, capture_output=True, text=True, env=env,
+    )
+
+
+def _ago(seconds: int) -> str:
+    return (datetime.now(timezone.utc) - timedelta(seconds=seconds)).isoformat()
+
+
+class GatePassExecutingHoldTests(unittest.TestCase):
+    """v0.1.1 item 3, whole-path: `check_executing`'s manual-criterion HOLD
+    (exit 3) wired end-to-end through `loop_state.py gate-pass --node
+    executing --project-dir` against a REAL local-verifier run (not a
+    synthetic dict — `tests/test_node_gates_store.py` covers `check_executing`
+    directly). An undischarged `manual` criterion on a non-live-test row
+    holds naming the row; attested, the same row passes."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        self.project_dir = self.root / "proj"
+        self.project_dir.mkdir()
+        (self.project_dir / ".gitignore").write_text(".hyperspace/\n")
+        (self.project_dir / "README.md").write_text("demo\n")
+        _git(self.project_dir, "init", "-q")
+        _git(self.project_dir, "add", ".")
+        _git(self.project_dir, "commit", "-q", "-m", "init", date=_ago(120))
+
+        from hyperspace.store import Store as _Store
+        self.store = _Store.init(self.project_dir / ".hyperspace" / "graph.db")
+        self.store.upsert_project(code="demo-project", name="Demo")
+
+    def tearDown(self) -> None:
+        self.store.close()
+
+    def _file_row(self, ext: str) -> None:
+        from hyperspace.tools import call_tool
+        result = call_tool(self.store, "upsert_work_item", {
+            "project": "demo-project", "external_id": ext, "name": "Produce the result file",
+            "type": "task", "state": "ready", "parent_work_item": None, "assignee_agent": None,
+            "team": None, "idempotency_key": f"{ext}-create",
+            "specification": {
+                "problem": "The project has no result file, so nothing downstream can read the outcome.",
+                "why_it_matters": "Downstream steps read out/result.txt; without it they have nothing to consume.",
+                "context_pointer": "tests/test_loop_state.py fixture.",
+            },
+            "source_references": [{"uri": "tests/test_loop_state.py"}], "effort_level": "quick", "module": None,
+            "acceptance_criteria": [
+                {"statement": "The result file is created by the work.",
+                 "verification": {"kind": "file_state", "path": "out/result.txt", "assertion": "exists"}},
+                {"statement": "The user has read the result file and confirms it is right.",
+                 "verification": {"kind": "manual", "instruction": "Open out/result.txt and confirm it reads right."}},
+            ],
+            "proposer_identity": "engineer", "proposer_surface": "cli-mac", "uncertainty_notes": [],
+        })
+        self.assertNotIn("error", result, result)
+
+    def _write_result(self) -> None:
+        time.sleep(0.02)
+        p = self.project_dir / "out" / "result.txt"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text("result\n")
+
+    def _close(self, ext: str, attestations: list[dict] | None = None) -> dict:
+        from hyperspace.judge import NoneJudge
+        from hyperspace.verify import CompletionClaim, ManualAttestation, complete_workitem, local_deps
+
+        deps = local_deps(self.store, NoneJudge(), project_root=self.project_dir)
+        claim = CompletionClaim(
+            project="demo-project", external_id=ext,
+            touched=[{"path": "out/result.txt", "effect": "created"}],
+            idempotency_key=f"{ext}-done", proposer_identity="engineer", proposer_surface="cli-mac",
+            manual_attestations=[ManualAttestation(**a) for a in (attestations or [])],
+        )
+        return asyncio.run(complete_workitem(claim, deps))
+
+    def _run_gate(self, ext: str) -> subprocess.CompletedProcess[str]:
+        workspace = self.root / "runs"
+        input_file = self.root / "original_input.md"
+        input_file.write_text("raw ask", encoding="utf-8")
+        init = _run_cli("init", "--goal", "hold-goal", "--input", str(input_file), "--workspace", str(workspace))
+        self.assertEqual(0, init.returncode, init.stderr)
+        state_path = workspace / "hold-goal" / "loop.state.json"
+        _run_cli("set-node", str(state_path), "--node", "executing")
+
+        workplan = self.root / "workplan.json"
+        workplan.write_text(json.dumps({"project": "demo-project", "work_items": [{"external_id": ext}]}))
+        reconciliation = self.root / "RECONCILIATION.md"
+        reconciliation.write_text(f"- {ext} → done\n", encoding="utf-8")
+
+        return _run_cli(
+            "gate-pass", str(state_path), "--node", "executing",
+            "--workplan", str(workplan), "--reconciliation", str(reconciliation),
+            "--artifact", str(workplan), "--by", "tester", "--project-dir", str(self.project_dir),
+        )
+
+    def test_undischarged_manual_holds_naming_the_row(self) -> None:
+        ext = "demo-project:hold"
+        self._file_row(ext)
+        self._write_result()
+        out = self._close(ext)  # no attestation -> unverifiable, recorded in verifier_runs
+        self.assertEqual("unverifiable", out["outcome"], out)
+
+        result = self._run_gate(ext)
+
+        self.assertEqual(3, result.returncode, result.stderr)
+        self.assertIn(ext, result.stderr)
+
+    def test_attested_manual_passes(self) -> None:
+        ext = "demo-project:hold2"
+        self._file_row(ext)
+        self._write_result()
+        out = self._close(ext, attestations=[{
+            "statement": "The user has read the result file and confirms it is right.",
+            "attested_by": "user", "verbatim": "yes, confirmed",
+        }])
+        self.assertEqual("done", out["outcome"], out)
+
+        result = self._run_gate(ext)
+
+        self.assertEqual(0, result.returncode, result.stderr)
 
 
 if __name__ == "__main__":

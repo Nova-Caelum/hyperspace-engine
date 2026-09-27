@@ -28,11 +28,10 @@ CONFIG_FILENAME = "config.toml"
 
 # One default model id per keyed provider, cited from real sources read this
 # session (never invented — B2/assumption-check):
-#   * openrouter -> "qwen/qwen3.7-flash": the canonical judges' own verified
-#     default (`_agentOS/graph_library/primitives/judges/_runtime.py:25`,
-#     `DEFAULT_MODEL = os.environ.get("VERIFIER_JUDGE_MODEL",
-#     "openrouter:qwen/qwen3.7-flash")`) — already in production use as an
-#     inexpensive, strong judge model.
+#   * openrouter -> "qwen/qwen3.7-flash": the source engine's own verified
+#     default for its judge runner (`DEFAULT_MODEL = os.environ.get(
+#     "VERIFIER_JUDGE_MODEL", "openrouter:qwen/qwen3.7-flash")`) — already in
+#     production use as an inexpensive, strong judge model.
 #   * anthropic -> "claude-sonnet-4-5": a current, non-deprecated model id per
 #     the Anthropic Python SDK's `ModelParam` literal union (context7
 #     `/anthropics/anthropic-sdk-python`, `model_param.py`, read 2026-09-26).
