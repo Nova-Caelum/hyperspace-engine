@@ -4,18 +4,23 @@
 Three sub-checks, all must PASS:
   (a) files: `ui/dist/index.html`, its assets, `ui/SOURCE.md`, `ui/build.sh`
       are present, and `ui/SOURCE.md` names the pinned commit (21a60c4).
-  (b) reproducibility: `ui/build.sh` rebuilds the bundle from a fresh local
-      clone of the pinned commit; the rebuilt file list matches `ui/dist/`'s
-      and every file's size is within 1% (differences beyond a hash mismatch
+  (b) reproducibility: `ui/build.sh` rebuilds the bundle from a fresh clone
+      of the pinned commit — a local clone via `--source <path>` when given,
+      else `ui/build.sh`'s own network default (`--source` omitted entirely,
+      never a personal path); the rebuilt file list matches `ui/dist/`'s and
+      every file's size is within 1% (differences beyond a hash mismatch
       from a build-time nonce are recorded, not silently accepted).
   (c) page: the bundle renders through a live door — either the real
       loopback door (`--door <url>`, when it exists) or a throwaway stdlib
       stub server that serves `ui/dist/` and answers the `/api/*` + `/mcp`
       calls the page makes with one seeded project and one seeded work
       item. `ui_page_check.mjs` drives a headless system-Chrome check
-      against whichever URL is live and reports what it saw.
+      against whichever URL is live and reports what it saw; playwright is
+      resolved from `PLAYWRIGHT_MODULE` if set, else `<source>/node_modules/
+      playwright/index.mjs` when `--source` names a local clone that already
+      has it installed, else this sub-check fails honestly, naming both.
 
-Usage: probes/check_ui_build.py --out <path> [--door <url>]
+Usage: probes/check_ui_build.py --out <path> [--door <url>] [--source <path>]
 """
 import argparse
 import hashlib
@@ -39,11 +44,6 @@ DIST = ROOT / "ui" / "dist"
 SOURCE_MD = ROOT / "ui" / "SOURCE.md"
 BUILD_SH = ROOT / "ui" / "build.sh"
 PINNED_COMMIT = "21a60c4"
-
-# The local Caelos clone this task built from — already checked out at the
-# pin, with node_modules present. Used as the `--source` for the
-# reproducibility rebuild so it runs with no network fetch beyond `npm ci`.
-BUILD_SOURCE_CLONE = Path.home() / "NovaCaelum_code" / "_worktrees" / "caelos-ui-build"
 
 SEED_PROJECT = {
     "code": "hsp-bundle-check",
@@ -120,24 +120,17 @@ def _hash_tree(root: Path) -> dict:
     return files
 
 
-def check_reproducible(evidence: dict) -> bool:
+def check_reproducible(evidence: dict, source: str | None) -> bool:
     if not BUILD_SH.exists():
         evidence["reproducibility"] = {"error": "ui/build.sh missing"}
-        return False
-    if not BUILD_SOURCE_CLONE.exists():
-        evidence["reproducibility"] = {
-            "error": f"local source clone not found at {BUILD_SOURCE_CLONE}",
-        }
         return False
 
     with tempfile.TemporaryDirectory() as tmp:
         out_dir = Path(tmp) / "rebuild-dist"
-        cmd = [
-            "sh", str(BUILD_SH),
-            "--source", str(BUILD_SOURCE_CLONE),
-            "--commit", PINNED_COMMIT,
-            "--out", str(out_dir),
-        ]
+        cmd = ["sh", str(BUILD_SH)]
+        if source:
+            cmd += ["--source", source]
+        cmd += ["--commit", PINNED_COMMIT, "--out", str(out_dir)]
         proc = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT)
         build_evidence = {
             "command": " ".join(cmd),
@@ -252,13 +245,26 @@ def _start_stub_server():
     return httpd, port
 
 
-def check_page(evidence: dict, door: str | None) -> bool:
+def check_page(evidence: dict, door: str | None, source: str | None = None) -> bool:
     node = shutil.which("node")
     if node is None:
         evidence["page"] = {"error": "`node` not found on PATH"}
         return False
 
-    playwright_module = BUILD_SOURCE_CLONE / "node_modules" / "playwright" / "index.mjs"
+    env_module = os.environ.get("PLAYWRIGHT_MODULE")
+    source_module = Path(source) / "node_modules" / "playwright" / "index.mjs" if source else None
+    if env_module:
+        playwright_module = Path(env_module)
+    elif source_module is not None and source_module.exists():
+        playwright_module = source_module
+    else:
+        evidence["page"] = {
+            "error": (
+                "no playwright module resolvable: PLAYWRIGHT_MODULE is unset, and "
+                f"{'--source not given' if source is None else f'{source_module} does not exist'}"
+            ),
+        }
+        return False
     if not playwright_module.exists():
         evidence["page"] = {"error": f"playwright module not found at {playwright_module}"}
         return False
@@ -320,12 +326,15 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", required=True)
     parser.add_argument("--door", default=None)
+    parser.add_argument("--source", default=None,
+                        help="local clone (or git URL) to rebuild from; omit to use "
+                             "ui/build.sh's own network default")
     args = parser.parse_args(argv)
 
     evidence: dict = {}
     a = check_files(evidence)
-    b = check_reproducible(evidence)
-    c = check_page(evidence, args.door)
+    b = check_reproducible(evidence, args.source)
+    c = check_page(evidence, args.door, args.source)
 
     result = "PASS" if (a and b and c) else "FAIL"
     write_verdict(args.out, probe="ui_build", result=result, evidence=evidence)
