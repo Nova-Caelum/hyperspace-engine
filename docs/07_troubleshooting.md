@@ -51,7 +51,7 @@ There is **no hold path** at this gate. It passes or it refuses.
 | `component has no name` | A component entry is missing its name. | Name it. An unnamed component cannot be referenced by a test or deferred by name. |
 | `duplicate component name: <name>` | Two components share a name. | Rename one. Ambiguous names make the mapping unverifiable. |
 | `<name>: tests must be a list of test ids` · `<name>: principles must be a list of principle ids` | Type error — a string where a list was expected. | Wrap it in a list, even for one entry. |
-| `<name>: unknown test id <id> (tests.json declares T1..Tn)` | A component claims to satisfy a test that does not exist. | Usually a typo or a stale id from an earlier draft of the tests file. The frozen tests file is authoritative. |
+| `<name>: unknown test id <id> (tests.json declares T1..T<n>)` | A component claims to satisfy a test that does not exist. | Usually a typo or a stale id from an earlier draft of the tests file. The frozen tests file is authoritative. |
 | `<name>: unknown principle <id> — not in principles.json` | A component is justified by a principle the snapshot does not contain. | Either the principle is missing from the snapshot or the id is wrong. A component justified by a principle that does not exist is unjustified. |
 | `T<n> maps to no component` | A frozen acceptance test has nothing that will satisfy it. | **This is the most important refusal at this gate.** Either add a component that addresses it, or deliberately defer it under `## Deferred`. Do not silently drop it — that is exactly what the check exists to prevent. |
 
