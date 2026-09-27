@@ -113,13 +113,14 @@ meant to be a complete work order.
 
 ### 9. Why the contract is imported lazily and never vendored
 
-The Understand gate validates its tests file against a schema contract. Two choices there, both
-deliberate.
+The Understand gate validates its tests file against the `CandidateWorkItem` contract. Two choices
+there, both deliberate.
 
-**Never vendored.** A copy of the contract inside this repository is a copy that drifts, and a
-validator checking against a stale schema gives a confident pass on a document the real system will
-reject. The gate imports the live contract or refuses with the import error — a loud failure rather
-than a quiet wrong answer.
+**Never vendored twice.** A second copy of the contract is a copy that drifts, and a validator checking
+a stale schema gives a confident pass on a document the real system will reject. The gate imports the
+contract from the plugin or refuses with the import error — a loud failure rather than a quiet wrong
+answer. It also refuses, by name, when the interpreter has no `pydantic` at all, and tells you which
+interpreter to use instead.
 
 **Imported lazily, inside the function.** The contract brings a validation library (Pydantic) with it.
 Importing at module level would load it for every consumer of the module, including the Build check
@@ -177,26 +178,37 @@ sitting unresolved forever. An unresolved thing is invisible, and invisible thin
 
 ### 13. The model behind the evidence judge
 
-Closing a row on evidence involves a judgment step: given the criteria and the delta the work
-produced, was the criterion satisfied? That step needs a model, and you supply it.
+Closing a row runs five steps: **Vet → CriteriaQuality → Landing → EvidenceJudge → Commit.** Two of
+them — CriteriaQuality and EvidenceJudge — are semantic, and you choose what performs them.
 
-What the choice affects, in rough order of importance:
+The options are `openrouter`, `anthropic`, `claude-code`, `codex`, and `none`.
 
-- **Refusal quality.** A weaker model refuses less precisely — it is likelier to return
-  `unverifiable` where a stronger one would have returned a specific, actionable refusal. Since
-  `unverifiable` routes to a human, a weaker model converts machine work into human work. That is the
-  real cost, and it is paid in the scarcest resource in the system.
+**`none` is a real choice, not a degraded one.** Under `none` the two semantic steps record `skipped`,
+and a row closes `done` if and only if the Landing check discharges every criterion on its own. You lose
+the judgment steps and you keep the part that cannot be talked round: evidence is still a delta, a
+criterion already true before the work started still discharges nothing, and a row with an undischarged
+executable criterion still refuses. What you give up is the ability to close rows whose criteria need
+reading rather than running — which, if your criteria are mostly `command_check` and `file_state`, may
+be nothing you were using.
+
+Start there if you want to see the loop work before wiring a key to it. Then, if you choose a model,
+what the choice affects, in rough order of importance:
+
+- **Refusal quality.** A weaker model refuses less precisely — likelier to return `unverifiable` where a
+  stronger one would have given a specific, actionable refusal. `unverifiable` routes to a human, so a
+  weaker model converts machine work into human work. That is the real cost, and it is paid in the
+  scarcest resource in the system.
 - **False passes.** The expensive failure. A model that accepts a plausible-looking claim reintroduces
   the founding problem at the last possible moment, after every gate has been satisfied.
-- **Per-close cost.** Every closure is a call. Frequent closes make a cheap model attractive; see the
+- **Per-close cost.** Every closure is a call. Frequent closes make a cheap model attractive; read the
   first two bullets before acting on that.
 
-**Recommendation:** use your strongest available model here, even where you would economise elsewhere.
-This is the one place in the loop where a wrong answer is both consequential and hard to notice — a
-false pass looks exactly like a pass.
+**Recommendation:** run `none` while you are learning the loop, then use your strongest available model
+once you are relying on it. This is the one place where a wrong answer is both consequential and hard to
+notice — a false pass looks exactly like a pass.
 
-Specific providers, keys and configuration are in the setup instructions, which are authoritative;
-this section is about the trade-off, not the wiring.
+Providers, keys and configuration are in the setup instructions and `hyperspace doctor`, which are
+authoritative. This section is about the trade-off, not the wiring.
 
 ### 14. What "done" means in your criteria
 

@@ -80,7 +80,8 @@ contains exactly four entries and nothing else.
 ### Skills, and why their names differ from the node names
 
 Each station is a **skill** — a directory with a `SKILL.md` that the agent loads when it enters that
-station. The skill is the only door in.
+station. The skill is the only door in. Two of the seven skills are not stations: `acing-hyperspace`
+routes, and `hyperspace-setup` prepares the project before any run exists.
 
 The skill names and the node names are not the same words, and this is the single most common source
 of confusion when reading the state file next to the skills:
@@ -93,6 +94,7 @@ of confusion when reading the state file next to the skills:
 | `gear4-draft` | `specifying` | Write the PRD and plan; file the work as trackable rows. |
 | `gear5-build` | `executing` | Build the software; reconcile every filed row. |
 | `gear6-live` | *(none — confers `live`)* | Hand over to the human. Nothing is built here. |
+| `hyperspace-setup` | *(none)* | First-run setup of the project's workspace. `hyperspace doctor` re-runs its checks. |
 
 There is no `gear1`. `acing-hyperspace` occupies the entry position that a `gear1` would have, and
 the numbering was not renormalised when that settled.
@@ -141,7 +143,7 @@ A gate is a function keyed to a node. Running it does three things, in order:
 
 1. **Check.** Read the specific evidence that node owes and verify it exists and parses. Not whether
    it is good — whether it is *there*, and whether it is internally consistent. Examples: the tests
-   file validates against the live contract; every acceptance test id is referenced by at least one
+   file validates against the contract; every acceptance test id is referenced by at least one
    component; every filed row appears in the reconciliation.
 2. **Freeze.** Record each named artifact with its sha256 in the state file.
 3. **Record.** Append to `gates` and `trail`.
@@ -160,7 +162,7 @@ A gate has four possible exits:
 HOLD exists only at the Build gate. The other three checks state explicitly that they have no hold
 path: they pass or they refuse.
 
-A **manual criterion** is one only a human can discharge — *"Daniel confirms the page loads"*. An
+A **manual criterion** is one only a human can discharge — *"the user confirms the page loads"*. An
 early version of the loop let those defer: build finishes, the manual criteria carry forward to the
 human's stage, the gate passes. That was reversed, and the reasoning is worth holding onto because it
 inverts the obvious framing:
@@ -196,34 +198,36 @@ individual rows: *a criterion that was already satisfied before the work started
 it, ever.* Without that rule an agent can close a row by pointing at something that was already true
 — technically accurate, entirely worthless. Landing checks compare against the state at filing time.
 
-The verifier returns exactly one of four answers — `done`, `refused`, `unverifiable`, `already_done`.
-Never a receipt, never a promise, never "probably". `unverifiable` is a real outcome and routes to a
-human rather than pretending to a verdict.
+Closure runs five steps in order — **Vet → CriteriaQuality → Landing → EvidenceJudge → Commit** — and
+returns exactly one of four answers: `done`, `refused`, `unverifiable`, `already_done`. Never a receipt,
+never a promise, never "probably". `unverifiable` is a real outcome and routes to a human rather than
+pretending to a verdict.
+
+Two of those steps are semantic and need a model. Which model is yours to choose, including choosing
+none — see [`05_design_rationale.md`](05_design_rationale.md) §13, because the choice has consequences
+worth understanding before you make it.
 
 ---
 
 ## 6. Budgets
 
-A run carries counters for the things that actually cost a human something:
+A run carries soft caps on the things that cost a human something:
 
-| Counter | Default cap | How it is known |
+| Counter | Cap | Counted by |
 |---|---|---|
-| `fresh_sessions` | 1 | detected automatically at session start |
-| `compactions` | 1 | detected automatically |
-| `daniel_hours` | 2 | not detected — recorded by hand if at all |
-| `worklog_entries` | 3 | not detected |
+| `fresh_sessions` | 1 | the session-start hook, on a `startup` event |
+| `compactions` | 1 | the same hook, on a `compact` event |
 
-Two properties matter. **Crossing a cap notifies; it never blocks.** A budget is a signal that this
-run is costing more than expected, not a guillotine. And each counter is explicitly flagged as
-*detected* or not, so a reader can tell which numbers are real and which are aspirational — a cap
-nothing increments is not a measurement.
+Two properties matter.
 
-The counters freeze when a run ends.
+**Crossing a cap notifies; it never blocks.** A budget is a signal that this run is costing more than
+expected, not a guillotine. The counters freeze when a run ends.
 
-The `daniel_hours` name is a genuine artifact of where this came from: the engine was built for one
-operator and published with the personalisation intact. Treat it as "human hours".
-
----
+**Only measured things are written.** An earlier version of this set also carried a real-time-hours cap
+and a worklog-entry cap. Nothing in the system observes an hour elapsing or a worklog append, so the
+plugin writes neither — a cap that nothing increments is not a measurement, and a field that looks like
+data while holding none is worse than an absent field. This is the same standard the gates apply to an
+agent's claims, turned on the engine itself.
 
 ## 7. Quality signals
 

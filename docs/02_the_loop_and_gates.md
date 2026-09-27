@@ -53,8 +53,8 @@ problem statement that motivates them.
 `tests.json` must be a valid work-item envelope, and the validation run *is* the evidence. In order:
 
 1. **Readable and JSON and an object.** Otherwise refused, naming the file.
-2. **Valid against the live contract.** The contract is imported lazily and never vendored into this
-   repository — a vendored copy is a copy that drifts. An import failure or a validation error is
+2. **Valid against the `CandidateWorkItem` contract.** The contract is imported lazily from the plugin
+   rather than vendored into a second copy — a vendored copy is a copy that drifts. An import failure or a validation error is
    refused *with the validator's own text*, not a paraphrase.
 3. **At least one non-`manual` criterion.** An all-manual test set is refused by name:
 
@@ -117,6 +117,11 @@ where intent becomes a set of things that can be individually closed.
 **Produces** a PRD, and `Plan.md` containing task blocks whose `task_id`s have been backfilled by the
 filing step.
 
+**Where rows are filed.** Filing writes one row per task block into the project's own task store — a
+local SQLite database at `.hyperspace/graph.db`, reached through the plugin's `hyperspace` MCP server —
+and writes the returned row id back into the plan. Nothing leaves the machine. The human-facing view
+over the same store is the task-graph console, served locally by `hyperspace serve`.
+
 ### What the gate checks
 
 `Plan.md` is read as *text*, through the one task-block parser, imported lazily. No contract, no
@@ -145,8 +150,12 @@ so one pass fixes them all.
 
 **The job.** Build it. Then account for every row you filed.
 
-**Produces** working software, a `BUILD_LEDGER.md` tracking the rows, verifier run files, and a
-reconciliation artifact giving every row a disposition.
+**Produces** working software, a `BUILD_LEDGER.md` tracking the rows, verifier run files under
+`<run>/misc/verifications/`, and a reconciliation artifact giving every row a disposition.
+
+Rows are closed by the verifier, which runs locally and writes one run file per attempt. A row may also
+be closed by hand in the task-graph console — a deliberate human closure is a legitimate discharge, and
+the two doors are distinguishable afterwards because each writes its own closure label.
 
 ### What the gate checks
 

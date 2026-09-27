@@ -14,7 +14,7 @@ each thing is *for*.
 
 ## The skills
 
-Six. Five are stations; one is the way in.
+Seven. Five are stations, one is the way in, and one prepares the project.
 
 | Skill | Fires when | Owns |
 |---|---|---|
@@ -24,6 +24,7 @@ Six. Five are stations; one is the way in.
 | `gear4-draft` | Decision frozen, nothing filed | The PRD and plan; filing the work as trackable rows |
 | `gear5-build` | Rows filed, software owed | Building it; reconciling every filed row |
 | `gear6-live` | Build gate has conferred `live` | Handing over. Nothing is built here. |
+| `hyperspace-setup` | First run in a project, before any loop run exists | Setting the project up. `hyperspace doctor` re-runs its checks at any time. |
 
 **Each skill is the only door into its station.** Not the preferred route — the only one. The gate
 contracts assume the artifacts that station produces, so entering the work without entering the skill
@@ -58,7 +59,7 @@ Four executables. `loop_state.py` carries the state machine and most of the surf
 
 | Action | For |
 |---|---|
-| `init` | Open a run. Creates the run folder, the state file, the skeleton layout, and the first drive map. Takes the goal slug and the verbatim original input. |
+| `init` | Open a run at `hyperspace/runs/<slug>/`. Creates the run folder, the state file, the skeleton layout, and the first drive map. **Refuses an occupied slug** rather than overwriting a run's history — `--force` is the explicit override. |
 | `read` | Print the state file. The safe way to ask "where are we?" |
 | `set-node` | Record a stage-boundary transition. Mirrors into `status` for the four stage nodes; refuses to downgrade a run that has already ended. |
 
@@ -86,6 +87,28 @@ Four executables. `loop_state.py` carries the state machine and most of the surf
 | `record-approval` | Record who held authority at a decision point — tier, whether a human was present, who could drive. |
 | `bump` | Increment a detected budget counter for one session-start event. Self-gates on a terminal run: an ended run's counters are frozen. |
 | `notify` | Print one line per crossed budget cap. **Never blocks.** Exits 0 always. |
+
+### The project
+
+| Action | For |
+|---|---|
+| `hyperspace init` | Prepare a project: the workspace, the local task store at `.hyperspace/graph.db`, the interpreter. |
+| `hyperspace doctor` | Re-run the setup checks and report what is missing. The first thing to run when something behaves as though it is not installed. |
+| `hyperspace serve` | Serve the task-graph console on `127.0.0.1` — the human-facing view over the same store the engine files into. `--open` opens a browser. |
+
+### The task store
+
+Filing and closing go through the plugin's `hyperspace` MCP server, against a local SQLite store at
+`.hyperspace/graph.db`. In a session the tools appear under
+`mcp__plugin_hyperspace-engine_hyperspace__*`. The ones that matter to the loop:
+
+| Tool | For |
+|---|---|
+| `upsert_work_item` | File a row. `gear4-draft` calls it once per task block and backfills the returned id into the plan. |
+| `upsert_project` · `upsert_module` | The containers rows belong to. |
+| `complete_workitem` | Close a row on evidence. Runs the five-step verifier locally and returns `done`, `refused`, `unverifiable`, or `already_done` — never a receipt. |
+
+Nothing leaves the machine.
 
 ### The run folder and the plan
 
@@ -117,8 +140,8 @@ Exit 3 with a list of rows and quoted criteria is not a failure. It is built wor
 judgment, with the exact questions enumerated. Working through that list is the fastest path to `done`.
 
 **4. Budgets tell you when a run is costing more than expected.**
-Crossing a cap notifies; it never blocks. Two counters are detected automatically; two are recorded by
-hand. Treat a crossed cap as a prompt to ask whether the run is still worth its cost.
+Two soft caps, both counted automatically: one fresh session and one compaction per task. Crossing a cap
+notifies; it never blocks. Treat it as a prompt to ask whether the run is still worth its cost.
 
 **5. A double-back is information, not a scolding.**
 Frozen artifacts that change are recorded. A run with many double-backs at the first station was a run
@@ -140,6 +163,10 @@ the evidence is what the next station reads.
 **1. The state file is the authority on where you are.** Not the conversation, not your memory of it,
 not what the last message was about. A resumed or compacted session re-enters at the node the state file
 names. Read it before acting.
+
+**1b. A goal slug is a run's identity.** `init` refuses one that is already occupied, because
+overwriting it would discard that run's trail, gates, frozen hashes and ending. Pick a new slug; the old
+run's artifacts become the new run's input.
 
 **2. Never hand-edit the state file.** Every write goes through an event verb that enforces
 preconditions — and the preconditions are the point. A hand-edited state file looks valid and lies.

@@ -62,39 +62,37 @@ Worth flagging for anyone extending the engine: this is the assumption most like
 
 ---
 
-## 4. Budget measurement is partial, and labelled as such
+## 4. Budget measurement, and what was cut to get there
 
-Four budget counters exist. Two are detected automatically at session start (`fresh_sessions`,
-`compactions`). Two are not (`daniel_hours`, `worklog_entries`) — they carry a cap and no incrementer.
+Two soft caps ship: `fresh_sessions` and `compactions`, both counted automatically by the session-start
+hook.
 
-**Each counter states which it is.** The `is_detected` flag exists precisely so a reader can tell a
-measured number from an intended one, and that is the right behaviour for a system that refuses to let
-an agent assert things it has not checked — the same standard, applied to itself.
+An earlier version of this set also carried a real-time-hours cap and a worklog-entry cap. Neither ships,
+because nothing in the system observes an hour elapsing or a worklog append — **a budget field is written
+only if it is measured.** Dropping them was the right call and it is the standard the gates already apply
+to an agent's claims, turned on the engine itself.
 
-The next step is to either wire real detection for the undetected pair or retire their caps. Carrying a
-labelled gap is honest; closing it is better.
+What remains open is whether the dimensions themselves are worth measuring. Human time is the scarcest
+resource here and nothing currently counts it. Measuring it properly needs a signal the engine does not
+have; inventing one that is wrong would be worse than the absence.
 
----
+## 5. Where the rules came from, and what the shipped tree keeps
 
-## 5. Personalisation: a deliberate choice with an open horizon
+Close to every rule in this loop is scar tissue from a specific session that went wrong. The gate that
+moved earlier, the manual criteria that hold the Build gate, the refusal to vendor a second copy of the
+contract — each traces to something that failed once, concretely.
 
-The skills address a specific human by name. A budget counter is called `daniel_hours`.
+The shipped tree carries the **rules and their reasoning** and does not carry the operator's name: the
+personal identifiers the loop was developed against are scanned out, and the contract fields that named a
+specific person are now `user_stated_*`. `05_design_rationale.md` quotes the reversals rather than
+presenting the current rules as self-evident, which is how the provenance survives without the
+personalisation.
 
-This is intentional. Close to every rule in the loop is scar tissue from a specific session that went
-wrong for a specific person. Generalising the language would make the rules read as though they had
-been designed in the abstract, which would misrepresent where they came from and remove the evidence
-that each one has a source. The specificity is part of the credential.
-
-As the engine is adopted more widely, three directions are available:
-
-- **Keep it verbatim** — the specificity stays the credential.
-- **Template the identity** — keep the incidents that motivated each rule, generalise the name.
-- **Separate rule from provenance** — the rule generalises; the incident stays cited beside it.
-
-The third is the most work and probably the most correct. The decision is open, and adopter experience
-is the input that should drive it.
-
----
+The open question is how much of that provenance a reader actually wants. Right now the reasoning sits
+inline, in the rationale document. The alternative is a separate record of decisions and the incidents
+behind them, leaving the rules to read cleanly on their own. Both are defensible; the current shape was
+chosen because a rule whose reason is one paragraph away is a rule people follow, and a rule in one file
+with its reason in another is a rule people work around.
 
 ## 6. HOLD at one gate, and whether it belongs at more
 
@@ -139,22 +137,15 @@ problem, and an interesting one. No approach is obviously correct yet.
 
 ---
 
-## 9. In flight
+## 9. Shipped in v0.1.0
 
-Work under way at the time of writing, separated from the speculative:
+Three things named as in flight in an earlier draft of this file have landed, and are recorded here so a
+reader can tell what is done from what is open:
 
-- **Standalone operation.** The engine's external dependencies are being removed so it runs on its
-  own. [`03_architecture.md`](03_architecture.md) and [`06_adaptation_notes.md`](06_adaptation_notes.md)
-  are written against the result and are authoritative on what changed — this is a pointer, not a
-  description.
-- **Generated reference set.** [`reference/`](reference/) and its drift test, per §8.
+- **Standalone operation.** The external dependencies are gone. Filing and closure run against a local
+  SQLite store behind the plugin's own MCP server, and the verifier runs on the machine.
+  [`03_architecture.md`](03_architecture.md) and [`06_adaptation_notes.md`](06_adaptation_notes.md) are
+  authoritative on the shape and on what changed.
+- **Generated reference set.** [`reference/`](reference/) with its drift test, per §8.
 - **Root `CLAUDE.md`.** So an adopter's own Claude Code session recognises a hyperspace-engine checkout
   and behaves correctly inside it.
-
----
-
-| | |
-|---|---|
-| **Back to** | [`00_start_here.md`](00_start_here.md) |
-| **What is here now** | [`03_architecture.md`](03_architecture.md) |
-| **What adaptation changed** | [`06_adaptation_notes.md`](06_adaptation_notes.md) |
