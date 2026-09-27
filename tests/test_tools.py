@@ -219,6 +219,50 @@ def test_upsert_work_item_done_sets_completed_by_console(store):
     assert result["row"]["completed_by"] == "hyperspace-console"
 
 
+# ── upsert_work_item — unresolved module/parent_work_item refused ────────
+#
+# Controller ruling (2026-09-27): gear4's emit demi files modules before
+# items, so a `module`/`parent_work_item` external_id that does not resolve
+# is a typo, not a legitimate ordering gap — refuse it loudly rather than
+# silently writing a row with `module_id`/`parent_work_item_id` = None.
+
+
+def test_upsert_work_item_unresolved_module_refused(store):
+    with pytest.raises(ToolError) as exc_info:
+        upsert_work_item(store, **_candidate(module="demo-project:mod-nonexistent"))
+    assert exc_info.value.code == "not_found"
+    assert "demo-project:mod-nonexistent" in exc_info.value.message
+    assert store.get_work_item(external_id="demo-project:wi-1", project_code="demo-project") is None
+
+
+def test_upsert_work_item_unresolved_parent_work_item_refused(store):
+    with pytest.raises(ToolError) as exc_info:
+        upsert_work_item(store, **_candidate(parent_work_item="demo-project:wi-nonexistent"))
+    assert exc_info.value.code == "not_found"
+    assert "demo-project:wi-nonexistent" in exc_info.value.message
+    assert store.get_work_item(external_id="demo-project:wi-1", project_code="demo-project") is None
+
+
+def test_upsert_work_item_resolves_existing_module_and_parent(store):
+    upsert_module(
+        store, project="demo-project", external_id="demo-project:mod-1",
+        name="Module One", acceptance_criteria="Every child work item in this module is done.",
+    )
+    upsert_work_item(
+        store, **_candidate(external_id="demo-project:parent-1", idempotency_key="parent-1-create")
+    )
+    result = upsert_work_item(
+        store,
+        **_candidate(
+            external_id="demo-project:wi-1",
+            module="demo-project:mod-1",
+            parent_work_item="demo-project:parent-1",
+        ),
+    )
+    assert result["row"]["module_id"] is not None
+    assert result["row"]["parent_work_item_id"] is not None
+
+
 # ── get_graph_run ─────────────────────────────────────────────────────────
 
 
