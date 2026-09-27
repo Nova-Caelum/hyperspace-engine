@@ -26,8 +26,8 @@ Decomposes the chosen option into named components a stranger could build and te
   - `<run-dir>/02_decide/Decision.md` — `## Options` (the `T<n>` list and the per-test lines of the chosen option) and `## Decision`; you sketch that option and no other
   - `<run-dir>/01_understand/tests.json` — the frozen criteria; the `WHOLE-PATH:` criterion is the one your data flow must walk end to end
   - `<run-dir>/01_understand/Problem.md` — `## Constraints` (every component honours every line), `## Out of scope` (nothing here comes back as a component)
-  - `_agentOS/skills_library/gear5-build/demi/demi-build-subagent-dispatch.md` — the shape N4 dispatches from; a component a fresh implementer cannot brief from your four lines is under-specified
-- **Locked decisions — do NOT re-open:** the `## Decision` (a better option found mid-sketch is a return to the node, not a silent switch); the frozen `tests.json`; the chief-pm rulings of 2026-09-07 (`BUILD_LEDGER.md`): component names are the mapping keys — distinctive, stable, reused verbatim by the descoping demi and by N3.
+  - `skills/gear5-build/demi/demi-build-subagent-dispatch.md` — the shape N4 dispatches from; a component a fresh implementer cannot brief from your four lines is under-specified
+- **Locked decisions — do NOT re-open:** the `## Decision` (a better option found mid-sketch is a return to the node, not a silent switch); the frozen `tests.json`; the the rulings of 2026-09-07 recorded in a prior run's build ledger: component names are the mapping keys — distinctive, stable, reused verbatim by the descoping demi and by N3.
 - **Loop state:** node `deciding`; `Decision.md` exists with `## Options` + `## Decision`.
 
 ### Your task
@@ -70,7 +70,7 @@ Append `## Architecture` to `Decision.md`.
 
 ## Gate contribution
 
-Indirect but load-bearing: the `###` names are the `name` values of `mapping.json`'s components, and `check_deciding` refuses a duplicate or nameless component and matches deferred names by exact string against `Deferred.md`. A name changed between this section and the mapping is an unmapped component at the gate. The Self-review carries what no lint can see; for the section's SHAPE, render `Decision.md` from `_agentOS/skills_library/_meta/templates/loop/decision.template.md` (it declares `## Options`, `## Decision`, `## Architecture`, `## Mapping`, `## Cuts` in order) and run `python3 $AGENTOS_ROOT/system/bin/template_lint.py --template <t> --document <d>` — landed T4.6, 2026-09-08, and deliberately not wired into `check_deciding`.
+Indirect but load-bearing: the `###` names are the `name` values of `mapping.json`'s components, and `check_deciding` refuses a duplicate or nameless component and matches deferred names by exact string against `Deferred.md`. A name changed between this section and the mapping is an unmapped component at the gate. The Self-review carries what no lint can see; for the section's SHAPE, render `Decision.md` from the loop's `decision.template.md` template (it declares `## Options`, `## Decision`, `## Architecture`, `## Mapping`, `## Cuts` in order) and run `.hyperspace/env/bin/python "${CLAUDE_PLUGIN_ROOT}/bin/template_lint.py" --template <t> --document <d>` — landed T4.6, 2026-09-08, and deliberately not wired into `check_deciding`.
 
 ## Common Rationalizations
 
@@ -83,8 +83,8 @@ Indirect but load-bearing: the `###` names are the `name` values of `mapping.jso
 ## Source
 
 - **Parent node:** `gear3-decide`
-- **Origin:** Plan T4.4 (2026-08-27); PRD §3.N2; chief-pm rulings 2026-09-07 (`BUILD_LEDGER.md`): `Decision.md ## Architecture` fixed; component names are the mapping keys.
-- **Precedent failures:** `m4-loop/gear3-decide-baseline.md` rows 3 (architecture before the test), 4 (v2 label on v1 sections), 7 (plan-inherited decomposition); `m4-loop/gear2-understand-baseline.md` row 1 (worker unwired).
-- **Authored by:** chief-pm on 2026-09-07.
-- **Community lineage:** obra/superpowers `brainstorming` 6.3.0 (MIT), archived at `01_research/upstream-source-6.3.0/skills/brainstorming/SKILL.md` §"Presenting the design" and §"Design for isolation and clarity". Ported: cover architecture · components · data flow · error handling · testing; scale each section to its complexity; break the system into units with one clear purpose and well-defined interfaces; per unit — what it does, how you use it, what it depends on; the two boundary questions (understand without internals / change internals without breaking consumers); follow existing patterns in an existing codebase. Not ported: "ask after each section whether it looks right" (no per-section human approval — the gate is the mapping check), the visual companion, the design-doc write and its user-review gate. Port / no-port table: `m4-loop/DerivationScope_gear3-decide_ChiefPM_2026-09-07.md`.
+- **Origin:** Plan T4.4 (2026-08-27); PRD §3.N2; rulings of 2026-09-07 recorded in a prior run's build ledger: `Decision.md ## Architecture` fixed; component names are the mapping keys.
+- **Precedent failures:** an internal baseline record, 2026-09-07 rows 3 (architecture before the test), 4 (v2 label on v1 sections), 7 (plan-inherited decomposition); an internal baseline record, 2026-09-07 row 1 (worker unwired).
+- **Authored by:** the engine's authors on 2026-09-07.
+- **Community lineage:** obra/superpowers `brainstorming` 6.3.0 (MIT), archived with the framework's research notes §"Presenting the design" and §"Design for isolation and clarity". Ported: cover architecture · components · data flow · error handling · testing; scale each section to its complexity; break the system into units with one clear purpose and well-defined interfaces; per unit — what it does, how you use it, what it depends on; the two boundary questions (understand without internals / change internals without breaking consumers); follow existing patterns in an existing codebase. Not ported: "ask after each section whether it looks right" (no per-section human approval — the gate is the mapping check), the visual companion, the design-doc write and its user-review gate. Port / no-port table: an internal derivation-scope record, 2026-09-07.
 - **Sibling demi-skills:** `demi-decide-option-generation`, `demi-decide-ruthless-descoping`.

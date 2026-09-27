@@ -1,8 +1,8 @@
 # Run-folder schema — where each file goes
 
-**Author:** cto · 2026-09-20 · **Daniel reviewed:** no
-**Why this exists:** Daniel, 2026-09-20 — by the Build node the run folder "was such a hot mess. I literally couldn't find anything." One run reached 54 loose files at its root.
-**Single source:** the folder list lives in `_agentOS/system/bin/drive_map.py` (`ROOT_FILES`, `FOLDERS`) and is printed at the top of every `DRIVE_MAP.md`. This page covers only the calls the list cannot make for you.
+**Author:** the engine's authors · 2026-09-20
+**Why this exists:** the author, 2026-09-20 — by the Build node the run folder "was such a hot mess. I literally couldn't find anything." One run reached 54 loose files at its root.
+**Single source:** the folder list lives in `bin/drive_map.py` (`ROOT_FILES`, `FOLDERS`) and is printed at the top of every `DRIVE_MAP.md`. This page covers only the calls the list cannot make for you.
 
 ## The layout
 
@@ -19,7 +19,7 @@ Open the run's `DRIVE_MAP.md` — its **Where things go** table is the layout, p
 
 ## The drive map
 
-`DRIVE_MAP.md` is generated from the disk — never type a path into it. `loop_state.py` rewrites it at `init`, at every `set-node` and at every passing `gate-pass`, so it matches the folder at both ends of every node. Mid-node, after a burst of new files: `python3 $AGENTOS_ROOT/system/bin/drive_map.py write <run-dir>`. To ask whether it is current: `drive_map.py check <run-dir>` (exit 0 = matches exactly).
+`DRIVE_MAP.md` is generated from the disk — never type a path into it. `loop_state.py` rewrites it at `init`, at every `set-node` and at every passing `gate-pass`, so it matches the folder at both ends of every node. Mid-node, after a burst of new files: `.hyperspace/env/bin/python "${CLAUDE_PLUGIN_ROOT}/bin/drive_map.py" write <run-dir>`. To ask whether it is current: `drive_map.py check <run-dir>` (exit 0 = matches exactly).
 
 The words after the dash on a line under **Full map** are yours. Write them once — what the file is, in a few words — and every regeneration keeps them. The engine's own files come pre-described.
 

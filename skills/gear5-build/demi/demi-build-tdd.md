@@ -25,7 +25,7 @@ Makes a row's change provable before it is claimed: one failing test observed fo
 - **Anchor docs (READ THESE FIRST):**
   - `<run-dir>/build/<row>/brief.md` — the row's typed acceptance criteria, verbatim
   - the test file each `command_check` criterion names, and the code under change
-- **Locked decisions — do NOT re-open:** D5 (VBC per task, before each `complete_workitem`); D8 (explicit test targets — never bare `pytest`, it spawns real inference on this Mac); the row's typed criteria (a repair goes through the controller, never through the test).
+- **Locked decisions — do NOT re-open:** D5 (VBC per task, before each `complete_workitem`); D8 (explicit test targets — never bare `pytest`, it spawns real inference on this machine); the row's typed criteria (a repair goes through the controller, never through the test).
 - **Loop state:** node `executing`.
 
 ### Your task
@@ -56,7 +56,7 @@ Turn one row's criteria into a red→green run.
 ### Escalate if
 
 - A criterion cannot be made true by any test-first change (wrong path, wrong target) → return `NEEDS_CONTEXT` naming it; do NOT bend the test to pass.
-- The RED run errors for a cause outside the row's files (venv, environment, dependency) → return `BLOCKED` with the output; do NOT install anything inside the vault.
+- The RED run errors for a cause outside the row's files (venv, environment, dependency) → return `BLOCKED` with the output; do NOT install anything inside the shared workspace.
 - Green needs a file another in-flight row owns → stop; return the path.
 
 ## Self-review
@@ -77,12 +77,12 @@ Turn one row's criteria into a red→green run.
 |---|---|
 | "The work is done; the criteria are a formality the verifier will sort out." | 2026-08-27: seven criteria with `<date>` paths — work finished, hashes recorded, `done` refused. T6.0 (2026-09-06): first closure `unverifiable` on a bare-relative path. Criteria are read and repaired first, through the controller. |
 | "Tests written after achieve the same thing." | A test written after passes immediately and proves nothing about its own power to fail. `## RED` exists so "it tests the right thing" has evidence, not faith. |
-| "I ran the tests myself; the report's status word is enough." | INC022 Class 1 — *"green status, nothing happened"*, five instances in one night. Pasted output is evidence; a status word is a claim. |
+| "I ran the tests myself; the report's status word is enough." | An internal incident record, INC022 Class 1 — *"green status, nothing happened"*, five instances in one night. Pasted output is evidence; a status word is a claim. |
 
 ## Source
 
-- **Origin:** T4.2 (2026-09-07); D5 per-task VBC, Daniel-signed 2026-09-07.
+- **Origin:** T4.2 (2026-09-07); D5 per-task VBC, signed by the author 2026-09-07.
 - **Precedent failures:** `taskgraph-write` §12 observation 2026-08-27; T6.0 run `4ca9f664` `unverifiable`; INC022 Class 1.
-- **Authored by:** chief-pm on 2026-09-07.
-- **Community lineage:** obra/superpowers `test-driven-development` 6.3.0 (MIT), archived at `01_research/upstream-source-6.3.0/skills/test-driven-development/SKILL.md`. Ported: iron law; RED → verify → GREEN → verify → refactor; "passes immediately = testing existing behavior". Not ported: TypeScript examples, the graph, `writing-good-tests.md`, ask-your-partner exceptions.
+- **Authored by:** the engine's authors on 2026-09-07.
+- **Community lineage:** obra/superpowers `test-driven-development` 6.3.0 (MIT), archived with the framework's research notes. Ported: iron law; RED → verify → GREEN → verify → refactor; "passes immediately = testing existing behavior". Not ported: TypeScript examples, the graph, `writing-good-tests.md`, ask-your-partner exceptions.
 - **Related:** `demi-build-subagent-dispatch`, `verification-before-completion`, `taskgraph-closure`.

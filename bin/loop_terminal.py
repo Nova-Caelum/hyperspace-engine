@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Closed set of legal endings for a loop run (T3.5).
 
-Task Graph: `nova-caelum-framework`, module `ncf-m3-state-layer`, row
-`ncf-m3-kill-predicate`. PRD_NovaCaelumFramework_ChiefPM_2026-08-27.md
-#9.1, verbatim:
+Origin: the framework's state-layer module (row `ncf-m3-kill-predicate`).
+The framework PRD, #9.1, verbatim:
 
     LoopStatus = "framing" | "understanding" | "deciding" | "specifying" |
                  "executing" | "verifying" |
