@@ -1,0 +1,14 @@
+{
+  "name": "hyperspace-engine",
+  "owner": {
+    "name": "Nova Caelum"
+  },
+  "description": "Hyperspace Engine — a working loop, a local task graph, and a local verifier for Claude Code, with no external infrastructure dependency.",
+  "plugins": [
+    {
+      "name": "hyperspace-engine",
+      "source": "./",
+      "description": "The working loop, a local SQLite task graph, and a local verifier — installable standalone, no accounts, no servers."
+    }
+  ]
+}
