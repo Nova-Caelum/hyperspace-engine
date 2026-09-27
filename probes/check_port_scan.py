@@ -96,7 +96,7 @@ def check_contract_resolution(evidence: dict) -> bool:
     text = (ROOT / "bin" / "node_gates.py").read_text(encoding="utf-8")
     result = {
         "path_home_count": text.count("Path.home()"),
-        "vault_path_count": text.count("NovaCaelum_Obs"),
+        "vault_path_count": text.count(FORBIDDEN_TERMS[0]),  # the vault root name
         "imports_package_contract": "hyperspace.contracts.candidate" in text,
     }
     evidence["contract_resolution"] = result

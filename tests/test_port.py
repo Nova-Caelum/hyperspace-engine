@@ -79,7 +79,7 @@ def test_b_gear_skill_names_only():
 def test_c_node_gates_resolves_contract_from_package():
     text = (ROOT / "bin" / "node_gates.py").read_text(encoding="utf-8")
     assert "Path.home()" not in text
-    assert "NovaCaelum_Obs" not in text
+    assert FORBIDDEN_TERMS[0] not in text  # the vault root name
     assert "hyperspace.contracts.candidate" in text
 
 
@@ -154,11 +154,11 @@ def test_validate_candidate_script(tmp_path):
     assert "VALID" in ok.stdout
 
     bad = tmp_path / "bad.json"
-    bad.write_text(json.dumps(_candidate(module="m", daniel_stated_type="task")), encoding="utf-8")
+    bad.write_text(json.dumps(_candidate(module="m", legacy_stated_type="task")), encoding="utf-8")
     refused = subprocess.run([sys.executable, str(script), str(bad)], capture_output=True, text=True)
     assert refused.returncode == 1
     assert "INVALID" in refused.stdout
-    assert "daniel_stated_type" in refused.stdout  # pydantic's own message, printed
+    assert "legacy_stated_type" in refused.stdout  # pydantic's own message, printed
 
     shipped = ROOT / "skills" / "gear2-understand" / "references" / "candidate-template.json"
     template = subprocess.run([sys.executable, str(script), str(shipped)], capture_output=True, text=True)

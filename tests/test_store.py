@@ -80,7 +80,7 @@ def test_project_round_trip(tmp_path):
             name="Demo",
             description="A demo project.",
             status="in-progress",
-            owner="daniel",
+            owner="maintainer",
             client="internal",
             folder_path="/workspace/demo-project",
             team=["engineer", "designer"],

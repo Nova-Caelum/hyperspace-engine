@@ -290,7 +290,7 @@ class LoopEndingLiveDoneTests(unittest.TestCase):
         state.set_node("live")
 
         with self.assertRaises(loop_terminal.IllegalEnding):
-            loop_state.confirm(state, by="daniel")
+            loop_state.confirm(state, by="user")
 
     def test_set_node_on_a_live_run_does_not_downgrade_status(self) -> None:
         """A stray `set-node --node executing` in a resumed session must
@@ -312,7 +312,7 @@ class LoopEndingLiveDoneTests(unittest.TestCase):
         state.set_node("executing")  # status="executing" via the ordinary mirror, never "live"
 
         with self.assertRaises(loop_terminal.IllegalEnding):
-            loop_state.confirm(state, by="daniel")
+            loop_state.confirm(state, by="user")
 
     def test_confirm_after_the_gate_passes_succeeds(self) -> None:
         """Companion positive case: `confirm` is unmodified by D1 (handoff
@@ -325,7 +325,7 @@ class LoopEndingLiveDoneTests(unittest.TestCase):
         )
         loop_state.record_approval(state, tier="human", human_present=True, authority="human")
 
-        loop_state.confirm(state, by="daniel")
+        loop_state.confirm(state, by="user")
 
         self.assertEqual("done", state.data["status"])
         self.assertEqual("done", state.data["final_route"])
