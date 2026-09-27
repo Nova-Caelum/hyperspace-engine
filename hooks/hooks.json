@@ -1,0 +1,15 @@
+{
+  "description": "Primes the acing-hyperspace skill on every session start (startup, resume, clear, compact) so the loop router is never silently dropped, prints the active run's status, and surfaces recent local task-graph activity.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}\"/hooks/session-start.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -5,10 +5,12 @@ by name (see the TERMS list below for exactly which strings), and
 `bin/node_gates.py` resolves the acceptance contract from the package rather
 than a home-directory path.
 
-Scans `bin skills hyperspace ui probes tests` — wider than the T1.2 port
+Scans `bin skills hyperspace ui probes tests hooks` — wider than the T1.2 port
 row's scan, which stops at bin/skills/hyperspace (this row deliberately
 widens scope to the whole shipped-plus-test tree; the brief calls this out
-explicitly). The same narrow, disclosed exclusion as `probe_no_nova_infra.py`
+explicitly). `hooks` was added in the v0.1.1 part A brief once that
+directory existed to scan. The same narrow, disclosed exclusion as
+`probe_no_nova_infra.py`
 applies to the two files that exist solely to define/mirror this denylist —
 see that module's docstring for the exact rule; nothing else is excused, and
 a real finding (a personal name baked into the vendored UI bundle, or used as
@@ -29,7 +31,7 @@ from scan_tree import scan  # noqa: E402
 ROOT = Path(__file__).resolve().parents[1]
 PROBE = "no_vault_refs"
 
-SCANNED_DIRS = ["bin", "skills", "hyperspace", "ui", "probes", "tests"]
+SCANNED_DIRS = ["bin", "skills", "hyperspace", "ui", "probes", "tests", "hooks"]
 # Built by concatenation — this file lives under probes/, itself in scope.
 # Every fragment below is checked (empirically, at authoring time) to contain
 # none of the six terms, or a substring of any of them, contiguously — a

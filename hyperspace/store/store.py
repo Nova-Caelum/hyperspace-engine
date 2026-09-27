@@ -323,7 +323,10 @@ class Store:
             row,
         )
         self._conn.commit()
-        return self.get_work_item(id=row["id"])
+        result = self.get_work_item(id=row["id"])
+        if fields.get("state") == "done" and (existing is None or existing.get("state") != "done"):
+            self._log_closure(result, fields.get("completed_by"))
+        return result
 
     def get_work_item(self, id: str | None = None, external_id: str | None = None, project_code: str | None = None) -> dict | None:
         if id is not None:
@@ -370,6 +373,7 @@ class Store:
 
     def set_work_item_state(self, id: str, state: str, completed_by: str | None = None) -> dict:
         _validate_enum(state, WORK_ITEM_STATES, "state")
+        before = self.get_work_item(id=id)
         now = _now()
         completed_at = now if state == "done" else None
         self._conn.execute(
@@ -381,7 +385,34 @@ class Store:
             (state, now, completed_at, completed_by, id),
         )
         self._conn.commit()
-        return self.get_work_item(id=id)
+        row = self.get_work_item(id=id)
+        if state == "done" and row is not None and (before is None or before.get("state") != "done"):
+            self._log_closure(row, completed_by)
+        return row
+
+    def _log_closure(self, row: dict | None, completed_by: str | None) -> None:
+        """Worklog entry for a transition INTO `done` (v0.1.1 item 1). Called
+        by both doors that can flip a work item to `done` — the verifier's
+        `set_work_item_state` and the console's `upsert_work_item` — only on
+        the transition itself (the caller checks the prior state); this
+        method does not re-check idempotency. A logging failure is swallowed
+        and must never block or revert the flip that triggered it: any
+        exception here is caught and the connection rolled back, so a broken
+        insert (e.g. `worklog` unexpectedly missing) leaves no pending
+        transaction behind for the next write to inherit."""
+        if row is None:
+            return
+        try:
+            summary = f"{row.get('external_id')} closed done ({completed_by})"[:280]
+            self.append_worklog(
+                author=completed_by,
+                summary=summary,
+                project=row.get("project_code"),
+                tags=["closure"],
+                work_item_id=row.get("id"),
+            )
+        except Exception:
+            self._conn.rollback()
 
     # ── work_item_relations ──────────────────────────────────────────────────
 
@@ -627,6 +658,28 @@ class Store:
     def get_verifier_run(self, id: str) -> dict | None:
         cur = self._conn.execute("SELECT * FROM verifier_runs WHERE id = ?", (id,))
         return _row_to_dict(cur.fetchone(), ["steps"])
+
+    def list_verifier_runs(self, external_id: str, project_code: str | None = None) -> list[dict]:
+        """Every verifier run recorded for `external_id`, in no particular
+        order — a caller wanting the newest sorts by its own criterion (e.g.
+        the run's own `steps["updated_at"]`).
+
+        `project_code` filters the DB column when given, but a run's row can
+        carry `project_code IS NULL` even when its own `steps` JSON correctly
+        names the project: `record_verifier_run` (via `StoreStateWriter`)
+        retries with `project_code=None` on a foreign-key mismatch, so a
+        claim naming a project the store hasn't seen yet still gets its run
+        recorded, unattached. A caller needing project parity with a run
+        FILE's `data.get("project")` check should match the parsed `steps`
+        field, not rely on this filter alone."""
+        clauses = ["external_id = ?"]
+        params: list[Any] = [external_id]
+        if project_code is not None:
+            clauses.append("project_code = ?")
+            params.append(project_code)
+        where = f"WHERE {' AND '.join(clauses)}"
+        cur = self._conn.execute(f"SELECT * FROM verifier_runs {where} ORDER BY started_at", params)
+        return [_row_to_dict(r, ["steps"]) for r in cur.fetchall()]
 
     # ── filings (append-only) ────────────────────────────────────────────────
 

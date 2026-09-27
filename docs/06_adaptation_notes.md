@@ -126,10 +126,10 @@ the other two from the state file and the schema. A field that asserts a measure
 false statement in the schema, and removing it is more honest than labelling it.
 
 The counters are incremented by `loop_state.py bump --event startup|compact`, which the source system
-calls from a session-start hook. v0.1 does not ship that hook, so in a plugin install the counters are
-declared and stay at zero until a hook calls `bump`. `notify` and the frozen-on-ending rule work
-unchanged. Shipping the hook is the step that makes the budget live — see
-[`09_future_states.md`](09_future_states.md).
+calls from a session-start hook. This plugin ships that hook (`hooks/session-start.sh`, wired by
+`hooks/hooks.json`): on every `SessionStart` it calls `bump` and `notify` for every non-terminal run
+under `hyperspace/runs/`, so `used` moves off zero from a real session the first time `startup` or
+`compact` fires. `notify` and the frozen-on-ending rule work unchanged.
 
 ---
 
@@ -195,7 +195,6 @@ of v0.1 with a known next step.
 | Seam | What it means today | Next step |
 |---|---|---|
 | Build gate evidence | The local verifier records its runs in the store's `verifier_runs` table, not as files under `misc/verifications/`. Run the Build gate with `--graph-snapshot` (a saved `list_work_items` result): verifier- and console-closed rows then pass by their `completed_by`. A row that is not `done` in the graph refuses by name; the HOLD enumeration of manual criteria reads verifier run files, so it does not fire from the store yet. | Export verifier runs to the run folder, or teach the gate to read `verifier_runs` |
-| Session-start hook | Not shipped, so budget counters stay at zero (§7). | Ship the hook with the plugin |
 | Windows | The MCP launcher is a POSIX shell script and the environment path is `env/bin/python`. | A Windows launcher and interpreter path |
 | Headless sessions | `claude -p` denies any tool that needs approval; the whole-path probe pre-approves exactly the tools its goal needs. Interactive sessions ask you as usual. | — |
 | Judge coverage in CI | CI exercises the `none` judge; the keyed and CLI judges are exercised when you run `probes/run.py judge_modes` with your own keys. | — |

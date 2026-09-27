@@ -14,7 +14,7 @@ Only the nodes below have an exit check; `gate-pass` refuses any other `--node` 
 | `understanding` | `check_understanding` | `--tests` | — |
 | `deciding` | `check_deciding` | `--decision` | — |
 | `specifying` | `check_specifying` | `--plan` | — |
-| `executing` | `check_executing` | `--workplan`, `--reconciliation` | `--verifications-dir`, `--graph-snapshot` |
+| `executing` | `check_executing` | `--workplan`, `--reconciliation` | `--verifications-dir`, `--graph-snapshot`, `--project-dir` |
 
 Every `gate-pass` also takes `--by <identity>` and at least one `--artifact <path>` (an empty
 list refuses with exit 1; freezing `DRIVE_MAP.md` refuses with exit 2).

@@ -61,6 +61,7 @@ Consult the node's exit check, then freeze the artifacts a node just produced.
 | `--tests` | no | T4.3: path to N1's tests.json; required when --node understanding |
 | `--decision` | no | T4.4: path to N2's mapping.json; required when --node deciding |
 | `--plan` | no | T4.5: path to N3's Plan.md with task_ids backfilled by the uploader; required when --node specifying |
+| `--project-dir` | no | explicit project directory (containing .hyperspace/graph.db), for the gate-exit worklog log and, on --node executing, the local verifier-run lookup. Resolved from the run folder otherwise; unresolved, both are silently skipped. |
 
 ### `check`
 

@@ -19,12 +19,13 @@ Code is truth. Skills own procedure. Docs own the machine.
 | Path | What it is |
 |---|---|
 | `bin/` | The engine: run state (`loop_state.py`), gates (`node_gates.py`), endings (`loop_terminal.py`), run-folder map, plan lint, contract pre-check, MCP launcher |
+| `hooks/` | The `SessionStart` hook (`hooks.json` + `session-start.sh`): primes `acing-hyperspace`, prints active-run status, bumps budget counters, surfaces recent worklog |
 | `skills/` | Six loop skills and `hyperspace-setup` |
 | `hyperspace/` | The runtime package: contracts, store, graph tools, verifier graph, judges, MCP server, loopback door, setup, CLI |
 | `ui/` | The prebuilt console; `ui/SOURCE.md` pins the source commit |
 | `probes/` | Acceptance probes that write verdict files |
 | `tests/` | The pytest suite, including the drift test for `docs/reference/` |
-| `docs/` | Understanding (numbered files) and reference (generated) |
+| `docs/` | Understanding (numbered files) and reference (generated, plus the hand-written `tripwires.md`) |
 
 The full component map is `docs/03_architecture.md`; what differs from the source engine is
 `docs/06_adaptation_notes.md` and `bin/PORT_NOTES.md`.

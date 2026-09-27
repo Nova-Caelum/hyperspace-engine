@@ -193,3 +193,29 @@ demi's Self-review:
 ### 14. Still named, not shipped
 - MCP tool `list_initiatives` (gear3 descoping) — being added to the graph tools by
   another row; the mention stays as the `hyperspace` server's `list_initiatives` tool.
+
+## v0.1.1 — session-start hook
+
+### 15. Session-start hook shipped
+- **Before:** v0.1 declared `fresh_sessions`/`compactions` in the budget block but shipped no hook to
+  call `bump`/`notify` — the counters stayed at zero forever (§5, §7 in `06_adaptation_notes.md`).
+- **After:** `hooks/hooks.json` + `hooks/session-start.sh` (v0.1.1 part A, hook-and-tripwires brief).
+  POSIX `sh`, no `matcher` (fires on every `SessionStart` source rather than hard-coding today's four),
+  no dependency beyond the plugin's own Python — no `jq`. Reads `source` from stdin with `sed`, strips
+  the primer's YAML frontmatter with `awk`, then runs one Python process (the project's
+  `.hyperspace/env/bin/python` if provisioned, else `python3` on `PATH`, else the block is skipped with
+  one visible line) that calls `loop_state.bump`/`loop_state.notify` directly as library functions
+  (not three separate CLI subprocesses) and reads up to 5 recent `worklog` rows from
+  `.hyperspace/graph.db` when it exists.
+- **New, hook-only config key:** `.hyperspace/config.toml`'s `worklog_owner` (default
+  `"hyperspace-engine"`) lets a future integration that owns its own worklog display opt this hook's
+  worklog block off. `hyperspace/config.py`'s `Config` dataclass does not carry this field and does not
+  need to — it only ever `.get()`s the four keys it knows, so an extra key is inert to every other
+  reader.
+- **Frontmatter stripping is new relative to the vault's own canonical session-start hook**, which
+  delivers its primer byte-identical, frontmatter included. This plugin's hook strips it — the
+  frontmatter is authoring metadata (`name`, `derives_from`, `license`, `author`, `version`), not
+  content a session needs primed.
+- **Why:** without this hook, `/clear` or a compaction silently drops the loop — nothing re-primes
+  `acing-hyperspace`, so its routing table only fires if the model happens to reach for the skill on
+  its own. Test: `tests/test_hooks.py`. Tripwires this creates: `docs/reference/tripwires.md`.
