@@ -16,7 +16,7 @@ Ported from `sprint-manager/references/handoff-prompt-template.md` (internal). E
   - [concrete paths: the code/tests the row touches, the decision entries that bind it]
 - **Decisions already locked — do NOT re-open:** [D-numbers]
 - **Isolation:** [shared-tree — files: … | worktree] — baseline: [explicit test command]
-- **Trigger tokens for your preloaded skills:** [literal tokens, e.g. "TDD", "verification-before-completion"] — conditional skills stay dormant without them
+- **Trigger tokens for your preloaded skills:** [literal tokens, e.g. "TDD", "evidence before closure — no completion claim without fresh, pasted verification output"] — conditional skills stay dormant without them
 - **Implementer contract:** you do not dispatch subagents; you do not close the row; you do not promote, deploy, or edit runtime paths
 
 ## Your task
@@ -58,8 +58,8 @@ Ported from `sprint-manager/references/handoff-prompt-template.md` (internal). E
 
 ## What changed from the sprint-manager template
 
-Dropped: phase/variant vocabulary, `sprint-manager-v2-fired` telemetry tags, `DANIEL_INPUT.md` (rulings go to `BUILD_LEDGER.md` and reach Daniel in the node's final "Rulings I made" list), the sprint-folder reference implementations. Added: loop position line, typed-criteria-verbatim rule, the implementer contract, the report-file RED/GREEN requirement, trigger tokens.
+Dropped: phase/variant vocabulary, `sprint-manager-v2-fired` telemetry tags, the principal-input file (rulings go to `BUILD_LEDGER.md` and reach the user in the node's final "Rulings I made" list), the sprint-folder reference implementations. Added: loop position line, typed-criteria-verbatim rule, the implementer contract, the report-file RED/GREEN requirement, trigger tokens.
 
 ## Source
 
-`sprint-manager/references/handoff-prompt-template.md` (Nova Caelum, v2 2026-06-27; itself preserved from v1 2026-04-26) · dispatch discipline from obra/superpowers `subagent-driven-development` 6.3.0 (MIT) §"Dispatch the implementer" · PM-3 trigger-token embedding (chief-pm persona).
+the retired sprint-manager skill's handoff-prompt template (v2 2026-06-27; itself preserved from v1 2026-04-26) · dispatch discipline from obra/superpowers `subagent-driven-development` 6.3.0 (MIT) §"Dispatch the implementer" · PM-3 trigger-token embedding (the planning agent's own practice).

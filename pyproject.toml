@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "hyperspace-engine"
+version = "0.1.0"
+description = "A working loop, a local SQLite task graph, and a local verifier for Claude Code — standalone, no Nova Caelum infrastructure dependency."
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = [
+    "pydantic>=2.11",
+    "pydantic-graph>=2.51",
+    "pydantic-ai-slim[anthropic,openrouter]>=2.40",
+    "mcp>=2.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+hyperspace = "hyperspace.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["hyperspace"]

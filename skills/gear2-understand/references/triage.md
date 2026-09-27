@@ -1,10 +1,10 @@
 # Triage — the three paths (gear2-understand)
 
-Ported from obra/superpowers `brainstorming` 6.3.0 (MIT) §"Three Paths", §"Anti-Pattern" and §"Red Flags", archived at `01_research/upstream-source-6.3.0/skills/brainstorming/SKILL.md`. What changed: upstream's human-approval HARD-GATE is replaced by the validator gate (`gate-pass --node understanding`); "bounded" keeps upstream's test (an existing flow on disk) and gains a size (a one-screen `Problem.md`); **the spike writes nothing** — no state file, no gate, no documents — which is the Plan T4.3 note verbatim and the reason this file exists (PRD §3.1(b); baseline row 5). Read by the node at step 1; the call is recorded by `demi-understand-problem-depth` under `## Path`.
+Ported from obra/superpowers `brainstorming` 6.3.0 (MIT) §"Three Paths", §"Anti-Pattern" and §"Red Flags", archived with the framework's research notes. What changed: upstream's human-approval HARD-GATE is replaced by the validator gate (`gate-pass --node understanding`); "bounded" keeps upstream's test (an existing flow on disk) and gains a size (a one-screen `Problem.md`); **the spike writes nothing** — no state file, no gate, no documents — which is the Plan T4.3 note verbatim and the reason this file exists (PRD §3.1(b); baseline row 5). Read by the node at step 1; the call is recorded by `demi-understand-problem-depth` under `## Path`.
 
 ## Say it before the first question
 
-Classify, then say the classification out loud — *"this looks bounded, so I'll open a run with a one-screen `Problem.md` and a short `tests.json`"* — so Daniel can override before any work. When in doubt between two, take the heavier. Reaching for the lighter label to skip the gate IS the doubt.
+Classify, then say the classification out loud — *"this looks bounded, so I'll open a run with a one-screen `Problem.md` and a short `tests.json`"* — so the user can override before any work. When in doubt between two, take the heavier. Reaching for the lighter label to skip the gate IS the doubt.
 
 ## The three paths
 
@@ -20,7 +20,7 @@ Ceremony scales with the path. The validator run does not.
 
 ## Why the cheap path is genuinely cheap
 
-PRD §3.1(b): *"if the lightest path still costs a state file, people stop invoking the node and we are back to ad-hoc specs landing in `_artifacts/`."* Observed 2026-09-07: 102 files in `AgentSecretBase/workspace/_artifacts/`, six of them PRDs, plans and specs written outside any loop, none with a tests file. A spike that cost even a state file would be skipped, and the goal it was probing would reach N2 with no `Problem.md`. So the spike costs nothing and registers nowhere — a design decision, not an omission: the state file `init` writes at bounded / architectural entry is the goal's registration for the C13 denominator, and a spike is not a goal, it is a question about one.
+PRD §3.1(b): *"if the lightest path still costs a state file, people stop invoking the node and we are back to ad-hoc specs landing in `_artifacts/`."* Observed 2026-09-07: 102 files in an internal catch-all artifacts folder, six of them PRDs, plans and specs written outside any loop, none with a tests file. A spike that cost even a state file would be skipped, and the goal it was probing would reach N2 with no `Problem.md`. So the spike costs nothing and registers nowhere — a design decision, not an omission: the state file `init` writes at bounded / architectural entry is the goal's registration for the C13 denominator, and a spike is not a goal, it is a question about one.
 
 Two consequences:
 - A spike's follow-up — *"the probe worked, keep it"* — is a NEW request. Classify it again; it is usually bounded. Throwaway code is not promoted by relabelling.

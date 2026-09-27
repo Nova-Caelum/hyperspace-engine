@@ -290,7 +290,7 @@ class LoopEndingLiveDoneTests(unittest.TestCase):
         state.set_node("live")
 
         with self.assertRaises(loop_terminal.IllegalEnding):
-            loop_state.confirm(state, by="daniel")
+            loop_state.confirm(state, by="user")
 
     def test_set_node_on_a_live_run_does_not_downgrade_status(self) -> None:
         """A stray `set-node --node executing` in a resumed session must
@@ -312,7 +312,7 @@ class LoopEndingLiveDoneTests(unittest.TestCase):
         state.set_node("executing")  # status="executing" via the ordinary mirror, never "live"
 
         with self.assertRaises(loop_terminal.IllegalEnding):
-            loop_state.confirm(state, by="daniel")
+            loop_state.confirm(state, by="user")
 
     def test_confirm_after_the_gate_passes_succeeds(self) -> None:
         """Companion positive case: `confirm` is unmodified by D1 (handoff
@@ -325,10 +325,127 @@ class LoopEndingLiveDoneTests(unittest.TestCase):
         )
         loop_state.record_approval(state, tier="human", human_present=True, authority="human")
 
-        loop_state.confirm(state, by="daniel")
+        loop_state.confirm(state, by="user")
 
         self.assertEqual("done", state.data["status"])
         self.assertEqual("done", state.data["final_route"])
+
+
+
+class InitDoesNotClobberTests(unittest.TestCase):
+    """Ported from the canonical engine (init must refuse an occupied slug).
+    Overwriting is how a descoped or killed run silently comes back to life:
+    a fresh document resets `status` to `framing`, which puts the run back on
+    the SessionStart banner and restarts its budget counters, with the
+    original trail, gates, artifacts and recorded ending gone."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.workspace = Path(self._tmp.name) / "workspace"
+        self.workspace.mkdir()
+
+    def _init(self, slug: str = "occupied-goal", **kw) -> "loop_state.LoopState":
+        return loop_state.LoopState.init(
+            goal_slug=slug, workspace=self.workspace,
+            original_input="x", framework_version="test-0", **kw,
+        )
+
+    def test_init_refuses_an_occupied_slug(self) -> None:
+        first = self._init()
+        with self.assertRaises(FileExistsError):
+            self._init()
+        # the original document is untouched by the refused call
+        on_disk = json.loads(first.path.read_text(encoding="utf-8"))
+        self.assertEqual(first.data["run_id"], on_disk["run_id"])
+
+    def test_refusal_message_identifies_the_existing_run(self) -> None:
+        first = self._init()
+        with self.assertRaises(FileExistsError) as ctx:
+            self._init()
+        self.assertIn(first.data["run_id"], str(ctx.exception))
+        self.assertIn("--force", str(ctx.exception))
+
+    def test_a_descoped_run_cannot_be_silently_resurrected(self) -> None:
+        first = self._init()
+        loop_state.descope(first, decision_ref="workspace/x/Decision_Descope.md")
+        self.assertEqual("descoped", first.data["status"])
+
+        with self.assertRaises(FileExistsError):
+            self._init()
+
+        on_disk = json.loads(first.path.read_text(encoding="utf-8"))
+        self.assertEqual("descoped", on_disk["status"])
+        self.assertEqual("descoped", on_disk["final_route"])
+        self.assertEqual(first.data["run_id"], on_disk["run_id"])  # not a new run
+        self.assertEqual(1, len(on_disk["trail"]))  # trail preserved, not reset
+
+    def test_force_replaces_the_state_document(self) -> None:
+        first = self._init()
+        second = self._init(force=True)
+        self.assertNotEqual(first.data["run_id"], second.data["run_id"])
+        self.assertEqual("framing", second.data["status"])
+
+    def test_a_different_slug_is_never_blocked(self) -> None:
+        self._init(slug="goal-a")
+        other = self._init(slug="goal-b")
+        self.assertEqual("framing", other.data["status"])
+
+    def test_cli_init_exits_nonzero_on_an_occupied_slug(self) -> None:
+        input_file = Path(self._tmp.name) / "original_input.md"
+        input_file.write_text("raw ask", encoding="utf-8")
+        args = ("init", "--goal", "cli-goal", "--input", str(input_file),
+                "--workspace", str(self.workspace))
+
+        first = _run_cli(*args)
+        self.assertEqual(0, first.returncode, first.stderr)
+
+        second = _run_cli(*args)
+        self.assertNotEqual(0, second.returncode)
+        self.assertIn("already exists", second.stderr)
+
+
+class TerminalStatusMirrorTests(unittest.TestCase):
+    """Ported from the canonical engine's event-verb tests: `descope` and
+    `record_kill` mirror `final_route` into `status`, and `bump` is a no-op
+    once the run has ended."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.workspace = Path(self._tmp.name) / "workspace"
+        self.workspace.mkdir()
+        self.state = loop_state.LoopState.init(
+            goal_slug="demo-goal", workspace=self.workspace,
+            original_input="x", framework_version="test-0",
+        )
+
+    def test_descope_mirrors_final_route_into_status(self) -> None:
+        """`descoped` is a LOOP_STATUS value and both downstream consumers
+        (the SessionStart banner's filter and `bump`'s self-gate) read
+        `.status`, not `.final_route`. Before this mirror existed a descoped
+        run stayed visible and kept burning budget counters forever."""
+        loop_state.descope(self.state, decision_ref="workspace/x/Decision_Descope.md")
+
+        self.assertEqual("descoped", self.state.data["status"])
+        self.assertTrue(loop_terminal.is_terminal(self.state.data["status"]))
+
+    def test_record_kill_mirrors_final_route_into_status(self) -> None:
+        loop_state.record_kill(self.state, reason="budget blew up")
+
+        self.assertEqual("killed", self.state.data["status"])
+        self.assertTrue(loop_terminal.is_terminal(self.state.data["status"]))
+
+    def test_bump_is_a_no_op_after_descope(self) -> None:
+        """Consumer-level proof of the mirror: the budget counters freeze
+        the moment the run ends, which is what `bump`'s docstring already
+        promised and what the missing mirror silently broke."""
+        before = self.state.data["budget"]["fresh_sessions"]["used"]
+
+        loop_state.descope(self.state, decision_ref="workspace/x/Decision_Descope.md")
+
+        self.assertEqual(0, loop_state.bump(self.state, event="startup"))
+        self.assertEqual(before, self.state.data["budget"]["fresh_sessions"]["used"])
 
 
 if __name__ == "__main__":

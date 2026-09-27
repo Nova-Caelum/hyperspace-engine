@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """Node exit-gate check registry (T4.8, `ncf-m4-exit-gate-completion`).
 
-Decision: `AgentSecretBase/workspace/hyperspace-engine_new_sprintframework/
-m4-loop/ExitGateDecision_T4.8_ChiefPM_2026-09-06.md` (D5/D5a in the sibling
-`DECISIONS.md`). An exit gate is how a node proves it is finished; for the
-Build node (`executing`) the only fresh evidence is the independent
-verifier's own persisted run files under
-`~/NovaCaelum_code/graph-machine/run/verifications/<run_id>.json` — never an
+Decision: an internal exit-gate decision record, 2026-09-06 (D5/D5a). An
+exit gate is how a node proves it is finished; for the Build node
+(`executing`) the only fresh evidence is the independent verifier's own
+persisted run files, `<verifications-dir>/<run_id>.json` (default:
+`<run-dir>/misc/verifications/`, see `VERIFICATIONS_SUBDIR`) — never an
 agent's claim. `loop_state.py gate-pass` consults `run_check()` here BEFORE
 it writes anything (D5a: folded into `gate-pass`, no standalone
 `exit_gate.py` — `overbloat-review` returned `shrink:`).
@@ -21,10 +20,10 @@ T4.8's final closure deletes the permissive branch: a node absent from
 caller keeps today's freeze-and-record behaviour (D6, time-bounded
 fail-open, disclosed).
 
-Stdlib at module level, plus the live contract where needed (D5a): the
-`understanding` check imports `graph_library.contracts.candidate` LAZILY,
-inside the function, so `check_executing` and its tests never load
-pydantic. The `deciding` check reads raw JSON and markdown only — no
+Stdlib at module level, plus the contract where needed (D5a): the
+`understanding` check imports `hyperspace.contracts.candidate` (the plugin's
+vendored copy) LAZILY, inside the function, so `check_executing` and its
+tests never load pydantic. The `deciding` check reads raw JSON and markdown only — no
 contract, no third import path. The `specifying` check reads the Plan as
 markdown text through the sibling `plan_lint` parser (imported lazily,
 stdlib only) — no contract, no MCP, no lint rule. No network.
@@ -34,18 +33,22 @@ from __future__ import annotations
 
 import json
 import json as _j
-import os
 import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-#: Default location of the verifier's persisted run files. Overridable via
-#: `loop_state.py gate-pass --verifications-dir`.
-DEFAULT_VERIFICATIONS_DIR = (
-    Path.home() / "NovaCaelum_code" / "graph-machine" / "run" / "verifications"
-)
+#: Where the verifier's persisted run files live by default, relative to the
+#: run folder: `<run-dir>/misc/verifications/`. `loop_state.py gate-pass`
+#: resolves it against the state file's folder; `--verifications-dir`
+#: overrides it.
+VERIFICATIONS_SUBDIR = Path("misc") / "verifications"
+
+
+def default_verifications_dir(run_dir: Path) -> Path:
+    """The default verifications directory for the run at `run_dir`."""
+    return Path(run_dir) / VERIFICATIONS_SUBDIR
 
 #: `final_result.outcome` values that count as a passing closure (ExitGateDecision
 #: table, N4 row: `final_result.outcome in {done, already_done}`).
@@ -56,7 +59,7 @@ _PASSING_OUTCOMES = frozenset({"done", "already_done"})
 class GateResult:
     """One node-check verdict. `ok=True` passes the gate outright.
     `ok=False, hold=True` is Decision D's HOLD (>=1 row `unverifiable`,
-    none missing/refused) — exit 3, awaiting Daniel's attestation.
+    none missing/refused) — exit 3, awaiting the user's attestation.
     `ok=False, hold=False` is an ordinary refusal — exit 1."""
 
     ok: bool
@@ -139,7 +142,7 @@ def _row_passes(run: dict[str, Any]) -> bool:
 def _landing_verdicts(run: dict[str, Any]) -> list[dict[str, Any]] | None:
     """The row's `steps.landing.data.verdicts` list, or `None` if that path
     is absent or malformed. Real shape verified 2026-09-17 against live
-    files under `DEFAULT_VERIFICATIONS_DIR` (e.g. run
+    verifier run files (e.g. run
     `96c4c071-cbae-48fb-a3dc-30421e2dfa0e`, external_id `ncf-m4-primer`):
     each verdict is a dict with `statement`, `kind`, `discharged`, `failed`,
     `uncertain`, `evidence`. A row whose `unverifiable` outcome came from an
@@ -165,7 +168,7 @@ def _landing_verdicts(run: dict[str, Any]) -> list[dict[str, Any]] | None:
 #: A reconciliation-artifact disposition line: a markdown bullet naming one
 #: workplan row's `external_id` and its disposition token. Anything after
 #: the disposition word — free-form notes on where the work landed — is
-#: ignored by this parser; it exists for Daniel and the next agent, not
+#: ignored by this parser; it exists for the user and the next agent, not
 #: for the check. Format: `- <external_id> → <disposition>[ ...notes]`.
 #: The four tokens are exhaustive by construction: the alternation IS the
 #: validation, so a typo'd disposition simply fails to match and its row
@@ -180,12 +183,15 @@ _LIVE_TEST_DISPOSITION = "live-test"
 #: Descoped work: passes without ever needing a verifier `done`.
 _SKIP_VERIFIER_DISPOSITIONS = frozenset({"deferred", "archived"})
 
-#: Role labels written to `work_items.completed_by` by the ops-server, one
+#: Role labels written to `work_items.completed_by` by the graph service, one
 #: per door. They are ROLE labels, never client ids or key material.
+#: In this plugin the local verifier's commit writes `hyperspace-verifier` and
+#: the console door writes `hyperspace-console` (the source engine used its own
+#: service's names for the same two doors).
 #:
 #: Why a label is sufficient: every path that can set `state="done"`
 #: stamps the door it came through. Five doors, three labels (verified
-#: empirically 2026-09-18, ops-server 0.9.17 — the CREATE half of the
+#: empirically 2026-09-18, graph service 0.9.17 — the CREATE half of the
 #: done guard was closed the same day after a probe found a candidate-
 #: shaped CREATE landing an unverified `done` under any fleet key).
 #:
@@ -196,8 +202,8 @@ _SKIP_VERIFIER_DISPOSITIONS = frozenset({"deferred", "archived"})
 #: accept, and it refuses BY NAME rather than falling through the
 #: unknown-label branch — the difference between "a door we know does
 #: not verify" and "a door that did not exist when this was written".
-_COMMITTER_LABEL = "graph-machine-committer"
-_CONSOLE_LABEL = "caelos-console"
+_COMMITTER_LABEL = "hyperspace-verifier"
+_CONSOLE_LABEL = "hyperspace-console"
 #: Known door, NOT evidence of verification — see above.
 _UPLOADER_LABEL = "workplan-uploader"
 
@@ -214,7 +220,7 @@ _PRE_STAMPING = "__pre_stamping__"
 #: with no `completed_by` updated AFTER this is a real miss and refuses.
 _VERIFIER_EPOCH = "2026-09-06T00:31"
 
-#: When STAMPING shipped (ops-server 0.9.17, this Mac's deploy). Before
+#: When STAMPING shipped (graph service 0.9.17, the author's deployment). Before
 #: this instant no row COULD carry a `completed_by`, whoever closed it —
 #: so a null label is not evidence of anything and the gate falls back to
 #: the original verifier-run check for those rows.
@@ -270,7 +276,7 @@ def _closure_verdict(external_id: str, row: dict | None) -> tuple[bool, str]:
             f"{external_id}: closed by {_UPLOADER_LABEL!r} — the workplan-ingest door "
             "checks identity but verifies nothing, so a plan declaring a row already "
             "finished lands it unverified. Close it through the verifier, or mark it "
-            "done in Caelos if you have confirmed it yourself"
+            "done in the task-graph console if you have confirmed it yourself"
         )
     if completed_by:
         return False, (
@@ -316,7 +322,7 @@ def _undischarged_manual_lines(external_id: str, run: dict[str, Any]) -> list[st
     reconciliation gate, 2026-09-17): one line per undischarged-or-failed
     `manual` verdict in `run`'s landing step, each exactly `<external_id>
     → <the manual criterion's exact statement>` — the format an agent
-    walks row-by-row when only Daniel's own attestation is outstanding.
+    walks row-by-row when only the user's own attestation is outstanding.
     Returns `[]` when the row has no landing verdicts at all (e.g. a
     `vet`-stage failure that never reached `landing`) or none are an
     undischarged/failed `manual` kind — that case falls through to the
@@ -341,7 +347,7 @@ def check_executing(
 ) -> GateResult:
     """The Build node's exit check (Step 0 of T4.8; reconciliation gate,
     T4.9/loop-ending-executing-live-done, 2026-09-17 — replaces the D2
-    manual-only-HOLD narrowing Daniel reversed the same day: an
+    manual-only-HOLD narrowing the author reversed the same day: an
     undischarged `manual` verdict is a failure to tell him built work was
     ready for review, not a free pass).
 
@@ -366,7 +372,7 @@ def check_executing(
     and its landing verdicts carry an undischarged or failed `manual`
     verdict, that criterion's exact statement is enumerated
     (`_undischarged_manual_lines`) into the HOLD message — the agenda an
-    agent hands Daniel to close it.
+    agent hands the user to close it.
     """
     workplan_data = _load_json_object(Path(workplan))
     if workplan_data is None:
@@ -424,9 +430,9 @@ def check_executing(
         # With a graph snapshot, the gate asks the SOURCE OF TRUTH who
         # closed the row instead of inferring it from local files. A
         # committer closure still consults the verifier run below, so an
-        # undischarged `manual` criterion HOLDs exactly as Daniel's
-        # reversal requires. A console closure is Daniel's own hand: he
-        # IS the discharge of a manual criterion, so it passes outright.
+        # undischarged `manual` criterion HOLDs exactly as the author's
+        # reversal requires. A console closure is the user's own hand: they
+        # ARE the discharge of a manual criterion, so it passes outright.
         if graph_rows is not None:
             ok, message = _closure_verdict(external_id, graph_rows.get(external_id))
             if not ok:
@@ -450,7 +456,7 @@ def check_executing(
             else:
                 found = _latest_verification(verifications_dir, project, external_id)
                 if found is None:
-                    continue  # committer-closed; run file simply not on this Mac
+                    continue  # committer-closed; run file simply not on this machine
                 path, run = found
                 if not _row_passes(run) and run.get("status") == "unverifiable":
                     manual = _undischarged_manual_lines(external_id, run)
@@ -458,7 +464,7 @@ def check_executing(
                         messages.extend(manual)
                         messages.append(
                             f"{external_id}: verifier status is 'unverifiable' in {path.name} "
-                            "— awaiting Daniel's attestation (Decision D)"
+                            "— awaiting the user's attestation (Decision D)"
                         )
                         any_unverifiable = True
                 continue
@@ -475,7 +481,7 @@ def check_executing(
             messages.extend(_undischarged_manual_lines(external_id, run))
             messages.append(
                 f"{external_id}: verifier status is 'unverifiable' in {path.name} "
-                "— awaiting Daniel's attestation (Decision D)"
+                "— awaiting the user's attestation (Decision D)"
             )
             any_unverifiable = True
         else:
@@ -510,17 +516,33 @@ _WHOLE_PATH_REFUSAL = (
 )
 
 
-def _agentos_root() -> Path:
-    """Where the live contract lives: env `AGENTOS_ROOT` if set; else this
-    file's `_agentOS` (two levels up from `system/bin/`) when the contract is
-    present there; else the canonical vault path."""
-    override = os.environ.get("AGENTOS_ROOT")
-    if override:
-        return Path(override)
-    local = Path(__file__).resolve().parents[2]
-    if (local / "graph_library" / "contracts" / "candidate.py").is_file():
-        return local
-    return Path.home() / "NovaCaelum_Obs" / "_agentOS"
+#: The plugin root — the directory holding `bin/` and the `hyperspace`
+#: package. Put on `sys.path` only when `hyperspace` is not already importable.
+PLUGIN_ROOT = Path(__file__).resolve().parents[1]
+
+_PYDANTIC_MISSING = (
+    "cannot validate tests.json: pydantic is not installed in this interpreter — "
+    "use the project's .hyperspace/env interpreter, or run: hyperspace doctor"
+)
+
+
+def _load_contract() -> tuple[Any, Any] | str:
+    """`(CandidateWorkItem, ValidationError)` from the plugin's vendored
+    contract, or a one-line refusal message. Never raises."""
+    try:
+        import pydantic  # noqa: F401, PLC0415 — probed first so its absence gets the named fix
+    except ImportError:
+        return _PYDANTIC_MISSING
+    try:
+        import importlib.util  # noqa: PLC0415
+
+        if importlib.util.find_spec("hyperspace") is None and str(PLUGIN_ROOT) not in sys.path:
+            sys.path.insert(0, str(PLUGIN_ROOT))
+        from hyperspace.contracts.candidate import CandidateWorkItem  # noqa: PLC0415 — lazy by design
+        from pydantic import ValidationError  # noqa: PLC0415
+    except Exception as exc:  # a GateResult cannot express exit 2; refuse with the cause
+        return f"cannot import the CandidateWorkItem contract from the plugin at {PLUGIN_ROOT}: {exc}"
+    return CandidateWorkItem, ValidationError
 
 
 def _strip_annotations(obj: Any) -> Any:
@@ -557,8 +579,10 @@ def check_understanding(tests: Path) -> GateResult:
     `tests` is N1's `tests.json` — a `CandidateWorkItem` envelope (ledger
     ruling 2026-09-07). The validator run IS the fresh evidence. In order:
     unreadable/not-JSON/non-object → refused; annotations stripped, then
-    validated against the LIVE contract (imported lazily, never vendored) →
-    import failure or `ValidationError` refused with its text; zero
+    validated against the contract (the plugin's vendored
+    `hyperspace.contracts.candidate`, imported lazily) → missing pydantic
+    refused with the one-line fix, import failure or `ValidationError`
+    refused with its text; zero
     non-`manual` criteria → refused naming C10; zero `WHOLE-PATH:` criteria →
     refused; otherwise ok with one count line. There is NO hold path at N1.
     """
@@ -568,17 +592,10 @@ def check_understanding(tests: Path) -> GateResult:
         return GateResult(ok=False, hold=False, messages=[f"tests file unreadable/not JSON: {tests}"])
     payload = _strip_annotations(raw)
 
-    root = _agentos_root()
-    try:
-        if str(root) not in sys.path:
-            sys.path.insert(0, str(root))
-        from graph_library.contracts.candidate import CandidateWorkItem  # noqa: PLC0415 — lazy by design
-        from pydantic import ValidationError  # noqa: PLC0415
-    except Exception as exc:  # a GateResult cannot express exit 2; refuse with the cause
-        return GateResult(
-            ok=False, hold=False,
-            messages=[f"cannot import the live CandidateWorkItem contract from {root}: {exc}"],
-        )
+    contract = _load_contract()
+    if isinstance(contract, str):
+        return GateResult(ok=False, hold=False, messages=[contract])
+    CandidateWorkItem, ValidationError = contract  # noqa: N806
 
     try:
         candidate = CandidateWorkItem(**payload)
@@ -586,7 +603,7 @@ def check_understanding(tests: Path) -> GateResult:
         messages: list[str] = []
         if _all_manual(payload):
             messages.append(_C10_REFUSAL)
-        messages.append(f"tests.json fails the live CandidateWorkItem contract: {exc}")
+        messages.append(f"tests.json fails the CandidateWorkItem contract: {exc}")
         return GateResult(ok=False, hold=False, messages=messages)
 
     criteria = candidate.acceptance_criteria
@@ -801,7 +818,7 @@ def _strip_task_id(value: str) -> str:
     return value.strip().strip("`").strip()
 
 
-# Copied from `taskgraph_emit._is_blank_task_id` (system/bin/taskgraph_emit.py L435-437), never imported — that module loads the live contract at import time.
+# Copied from the task-graph uploader's `_is_blank_task_id` (taskgraph_emit.py), never imported — that module loads the contract at import time.
 def _is_blank_task_id(value: str) -> bool:
     v = _strip_task_id(value)
     return v == "" or "blank" in v.lower()
@@ -894,12 +911,13 @@ def run_check(node: str, **evidence: Any) -> GateResult | None:
 
 
 __all__ = [
-    "DEFAULT_VERIFICATIONS_DIR",
+    "VERIFICATIONS_SUBDIR",
     "GateResult",
     "check_deciding",
     "check_executing",
     "check_specifying",
     "check_understanding",
     "CHECKS",
+    "default_verifications_dir",
     "run_check",
 ]
