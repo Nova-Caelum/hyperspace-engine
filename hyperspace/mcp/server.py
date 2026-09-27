@@ -35,9 +35,9 @@ repo's actual installed package (not assumed from docs alone — B2):
                         server.create_initialization_options(
                             notification_options=NotificationOptions(tools_changed=True)))
 
-TODO(M3, judge row): `hyperspace.judge.get_judge` does not exist on this
-base — only `NoneJudge` ships. This module calls `NoneJudge()` directly.
-Swap for `get_judge(config)` once the judge row lands (see report concerns).
+The judge is selected from the project's `.hyperspace/config.toml` through
+`hyperspace.judge.get_judge(load_config(root))`, so the MCP path honours the
+user's configured runner (`none` when nothing is configured).
 """
 import json
 import os
@@ -52,7 +52,8 @@ from mcp.server import NotificationOptions, Server, ServerRequestContext
 import mcp.types as types
 
 from ..http.server import is_bound, start
-from ..judge import NoneJudge
+from ..config import load_config
+from ..judge import get_judge
 from ..store import Store
 from ..tools.registry import TOOLS, call_tool
 from ..verify import CompletionClaim, complete_workitem, local_deps
@@ -146,9 +147,14 @@ def _is_tool_error_payload(payload) -> bool:
     )
 
 
+def _judge_for(root: Path):
+    """The configured judge for this project — `none` unless config says otherwise."""
+    return get_judge(load_config(root))
+
+
 async def _call_complete_workitem(store: Store, root: Path, arguments: dict) -> dict:
     claim = CompletionClaim(**arguments)  # ValidationError propagates to the caller
-    deps = local_deps(store, NoneJudge(), project_root=root)
+    deps = local_deps(store, _judge_for(root), project_root=root)
     return await complete_workitem(claim, deps)
 
 

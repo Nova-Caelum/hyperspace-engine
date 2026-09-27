@@ -272,3 +272,16 @@ def test_missing_store_lists_but_refuses_calls(tmp_path):
 def test_server_module_has_no_future_annotations_import():
     source = (REPO_ROOT / "hyperspace" / "mcp" / "server.py").read_text(encoding="utf-8")
     assert "from __future__ import annotations" not in source
+
+
+# ── judge selection (controller D10 swap after the judge row landed) ──────────
+
+
+def test_mcp_uses_the_configured_judge(tmp_path):
+    from hyperspace.mcp.server import _judge_for
+
+    project = tmp_path / "proj"
+    Store.init(project / ".hyperspace" / "graph.db")
+    assert _judge_for(project).name == "none"  # nothing configured → none
+    (project / ".hyperspace" / "config.toml").write_text('judge = "claude-code"\n')
+    assert _judge_for(project).name == "claude-code"
