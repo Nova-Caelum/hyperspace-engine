@@ -45,17 +45,35 @@ def _new_filing_key() -> str:
 
 
 def _resolve_module_id(store: Store, project: str, module_external_id: str | None) -> str | None:
+    """Resolves a `module` external_id to its store id, or refuses.
+
+    Controller ruling (2026-09-27): gear4's emit demi files modules before
+    items, so an unresolved `module` is a typo, not a legitimate ordering
+    gap — refuse loudly rather than silently writing `module_id = None`.
+    """
     if module_external_id is None:
         return None
     mod = store.get_module(project_code=project, external_id=module_external_id)
-    return mod["id"] if mod else None
+    if mod is None:
+        raise ToolError(
+            "not_found",
+            f"module not found: {module_external_id!r} (project {project!r})",
+        )
+    return mod["id"]
 
 
 def _resolve_parent_id(store: Store, project: str, parent_external_id: str | None) -> str | None:
+    """Resolves a `parent_work_item` external_id to its store id, or refuses
+    (same ruling as `_resolve_module_id` — an unresolved parent is a typo)."""
     if parent_external_id is None:
         return None
     parent = store.get_work_item(project_code=project, external_id=parent_external_id)
-    return parent["id"] if parent else None
+    if parent is None:
+        raise ToolError(
+            "not_found",
+            f"parent work item not found: {parent_external_id!r} (project {project!r})",
+        )
+    return parent["id"]
 
 
 def _render_description(spec: Specification) -> str:
