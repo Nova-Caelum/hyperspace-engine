@@ -5,7 +5,7 @@
 #
 #   --source   Clone source: a local path (used as a local clone source, no
 #              network) or a git URL. Default: the public Caelos repo.
-#   --commit   Commit to pin the build to. Default: 21a60c4 (the commit this
+#   --commit   Commit to pin the build to. Default: dfcb46d (the commit this
 #              shipped bundle was built from — see ui/SOURCE.md).
 #   --out      Output directory to replace wholesale with the fresh build.
 #              Default: ui/dist (relative to this script's repo root).
@@ -16,7 +16,7 @@
 set -eu
 
 SOURCE="https://github.com/Nova-Caelum/Caelos.git"
-COMMIT="21a60c4"
+COMMIT="dfcb46d"
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 OUT="$SCRIPT_DIR/dist"
 
@@ -58,8 +58,8 @@ git clone --no-checkout "$SOURCE" "$TMP_BUILD_DIR"
   echo "ui/build.sh: npm ci" >&2
   npm ci
 
-  echo "ui/build.sh: VITE_API_BASE_URL=. npm run build" >&2
-  VITE_API_BASE_URL=. npm run build
+  echo "ui/build.sh: VITE_API_BASE_URL=. VITE_HUMAN_OWNER=user npm run build" >&2
+  VITE_API_BASE_URL=. VITE_HUMAN_OWNER=user npm run build
 )
 
 if [ ! -d "$TMP_BUILD_DIR/dist" ]; then

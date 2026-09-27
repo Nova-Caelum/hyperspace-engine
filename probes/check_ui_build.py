@@ -3,7 +3,7 @@
 
 Three sub-checks, all must PASS:
   (a) files: `ui/dist/index.html`, its assets, `ui/SOURCE.md`, `ui/build.sh`
-      are present, and `ui/SOURCE.md` names the pinned commit (21a60c4).
+      are present, and `ui/SOURCE.md` names the pinned commit (dfcb46d).
   (b) reproducibility: `ui/build.sh` rebuilds the bundle from a fresh clone
       of the pinned commit — a local clone via `--source <path>` when given,
       else `ui/build.sh`'s own network default (`--source` omitted entirely,
@@ -43,7 +43,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT / "ui" / "dist"
 SOURCE_MD = ROOT / "ui" / "SOURCE.md"
 BUILD_SH = ROOT / "ui" / "build.sh"
-PINNED_COMMIT = "21a60c4"
+PINNED_COMMIT = "dfcb46d"
 
 SEED_PROJECT = {
     "code": "hsp-bundle-check",
