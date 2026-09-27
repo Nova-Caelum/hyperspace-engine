@@ -329,17 +329,25 @@ def main(argv=None) -> int:
     parser.add_argument("--source", default=None,
                         help="local clone (or git URL) to rebuild from; omit to use "
                              "ui/build.sh's own network default")
+    parser.add_argument("--no-page", action="store_true", dest="no_page",
+                        help="skip check_page (the Playwright/system-Chrome render check) — "
+                             "for a CI runner that has Node for the rebuild but no browser/"
+                             "Playwright install; files + reproducibility still run")
     args = parser.parse_args(argv)
 
     evidence: dict = {}
     a = check_files(evidence)
     b = check_reproducible(evidence, args.source)
-    c = check_page(evidence, args.door, args.source)
+    if args.no_page:
+        evidence["page"] = {"skipped": "--no-page"}
+        c = True
+    else:
+        c = check_page(evidence, args.door, args.source)
 
     result = "PASS" if (a and b and c) else "FAIL"
     write_verdict(args.out, probe="ui_build", result=result, evidence=evidence)
 
-    print(f"ui_build: {result} (files={a} reproducible={b} page={c})")
+    print(f"ui_build: {result} (files={a} reproducible={b} page={c if not args.no_page else 'skipped'})")
     return 0 if result == "PASS" else 1
 
 

@@ -20,3 +20,17 @@ jobs:
       - run: uv run python -m pytest tests/ -q
       - run: npm install -g @anthropic-ai/claude-code
       - run: claude plugin validate --strict .
+      - run: >
+          uv run python probes/run.py --out probe-out --no-paid
+          no_nova_infra no_vault_refs gear_names known_defects pydantic_graph
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: >
+          uv run python probes/check_ui_build.py --out probe-out/ui_build.json
+          --no-page
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: probe-out
+          path: probe-out/
