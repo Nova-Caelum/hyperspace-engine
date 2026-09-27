@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """Run-state file, reader and writer for a multi-session loop run (T3.1).
 
-Task Graph: `nova-caelum-framework`, module `ncf-m3-state-layer`,
-row `ncf-m3-state-object`. Gives a piece of multi-session work a
+Origin: the framework's state-layer module (row `ncf-m3-state-object`).
+Gives a piece of multi-session work a
 machine-readable file that answers, on resume, which stage it stopped in,
 which gates it passed, how much budget it has burned, and how it ended —
 instead of requiring a fresh session to read prose and guess.
 
-Runtime files land at `workspace/<goal-slug>/loop.state.json` (D6). The shape
-is declared in the sibling `loop_state.schema.json` and mirrors
-`_agentOS/graph_library/contracts/run.py`'s `MachineRun` field-for-field
+Runtime files land at `<runs-dir>/<goal-slug>/loop.state.json` (D6). The shape
+is declared in the sibling `loop_state.schema.json` and mirrors the Graph
+Machine contract `graph_library/contracts/run.py`'s `MachineRun` field-for-field
 where meaning matches (`run_id`, `original_input`, `input_hash`, `status`,
 `current_node`) — `framework_version` plays `machine_version`'s role, and
 `status` uses PRD #9.1's `LoopStatus` set rather than `run.py`'s `RunStatus`
@@ -38,9 +38,10 @@ the only three ways a run may reach a terminal state. Each writes
 writes that field. `LOOP_STATUS`/`LEGITIMATE_TERMINAL` now live in
 `loop_terminal.py` (single source); this module imports them.
 
-Counter semantics beyond the doubled-back count (rework/pivot caps,
-`_is_measured`/`_is_detected`, driver-approval recording, escape rate) are
-T3.6's row — out of scope here.
+Budget (T3.6, narrowed by the plugin port — see `PORT_NOTES.md`, S1): the
+state file writes only counters something actually counts. `fresh_sessions`
+and `compactions` carry a `cap`/`used` pair the SessionStart hook bumps;
+counters nothing observes are not written at all.
 """
 
 from __future__ import annotations
@@ -81,7 +82,7 @@ LEGITIMATE_TERMINAL = loop_terminal.LEGITIMATE_TERMINAL
 # `framing` is also excluded: `LoopState.init` sets `status`/`current_node`
 # to "framing" directly (never through `set_node`), and no caller in this
 # tree ever calls `set_node(..., "framing")` (verified 2026-09-17 by
-# grepping every `set-node`/`set_node` call site under `_agentOS/`) — so
+# grepping every `set-node`/`set_node` call site in the engine) — so
 # cutting it from the mirror changes no existing behavior.
 _STATUS_MIRROR_NODES = frozenset({"understanding", "deciding", "specifying", "executing"})
 
@@ -156,25 +157,20 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _cap_block(*, cap: float | None, is_measured: bool, is_detected: bool) -> dict[str, Any]:
-    return {"cap": cap, "used": 0, "_is_measured": is_measured, "_is_detected": is_detected}
+def _cap_block(*, cap: float | None) -> dict[str, Any]:
+    return {"cap": cap, "used": 0}
 
 
-# Daniel's four caps (Plan T3.6 note, 2026-08-27; PRD §6.3): one fresh
-# session, one compaction, two real-time hours, three worklog entries, per
-# task. Never invented here — set once, cited to source. All four ship
-# `_is_measured: False` (PRD §6.3: Daniel's numbers are guesses, not
-# measurements). `_is_detected` is True only for fresh_sessions/compactions
-# — the SessionStart hook observes `startup`/`compact` events and can bump
-# them; `daniel_hours`/`worklog_entries` are False because nothing in this
-# system observes a real-time hour elapsing or a worklog append happening
-# (PRD §6.2's own rule: an undetected cap is advisory, not a violation —
-# the schema `description` on those two fields says so explicitly).
-DANIEL_CAPS: dict[str, dict[str, Any]] = {
-    "fresh_sessions": {"cap": 1, "is_measured": False, "is_detected": True},
-    "compactions": {"cap": 1, "is_measured": False, "is_detected": True},
-    "daniel_hours": {"cap": 2, "is_measured": False, "is_detected": False},
-    "worklog_entries": {"cap": 3, "is_measured": False, "is_detected": False},
+# The per-task soft caps the state file counts (Plan T3.6 note, 2026-08-27;
+# PRD §6.3): one fresh session and one compaction per task. Both are counted
+# — the SessionStart hook observes `startup`/`compact` events and bumps
+# them. The source set also named a real-time-hours cap and a worklog-entry
+# cap; nothing in this system observes an hour elapsing or a worklog append,
+# so the plugin port writes neither (S1: a budget field is written only if
+# it is measured — see `PORT_NOTES.md`).
+SOFT_CAPS: dict[str, dict[str, Any]] = {
+    "fresh_sessions": {"cap": 1},
+    "compactions": {"cap": 1},
 }
 
 # Which SessionStart `source` bumps which cap. Any other source is a no-op
@@ -187,8 +183,8 @@ _BUMP_EVENT_TO_CAP: dict[str, str] = {
 
 def _default_budget() -> dict[str, Any]:
     budget: dict[str, Any] = {
-        name: _cap_block(cap=spec["cap"], is_measured=spec["is_measured"], is_detected=spec["is_detected"])
-        for name, spec in DANIEL_CAPS.items()
+        name: _cap_block(cap=spec["cap"])
+        for name, spec in SOFT_CAPS.items()
     }
     budget.update({
         "rework_rounds": 0,
@@ -197,6 +193,21 @@ def _default_budget() -> dict[str, Any]:
         "stage_retries": 0,
     })
     return budget
+
+
+def _describe_existing_run(path: Path) -> str:
+    """Best-effort one-line identification of the run already at `path`,
+    for the `init` refusal message. Never raises: a state document too
+    corrupt to read is exactly a case where the refusal still has to be
+    legible."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return "unreadable state document"
+    return (
+        f"run_id={data.get('run_id')}, status={data.get('status')!r}, "
+        f"final_route={data.get('final_route')!r}"
+    )
 
 
 @dataclass
@@ -217,10 +228,37 @@ class LoopState:
         original_input: str,
         framework_version: str = "unknown",
         run_id: str | None = None,
+        force: bool = False,
     ) -> "LoopState":
+        """Open a new run at `<workspace>/<goal_slug>/loop.state.json`.
+
+        Refuses rather than clobbers. A slug that already holds a run is
+        almost always a RESUMED goal, not a new one — and `init` writes a
+        whole fresh document, so overwriting silently discards that run's
+        `trail`, `gates`, frozen `artifacts`, `budget`, `run_id` and any
+        recorded ending (`descope_decision_ref` / `kill`). A descoped run
+        re-`init`-ed under its own slug would come back as `framing`: its
+        history gone, its banner line back, its counters reset to zero —
+        the ending silently undone by the act of picking the goal back up.
+        The run FOLDER is deliberately still reusable; it is the state
+        document alone that is protected, so a resumed goal keeps its prose
+        and starts a clean run beside it under a new slug.
+
+        `force=True` is the explicit override, for the one legitimate case:
+        a run whose state document is known-corrupt and is being replaced
+        on purpose.
+        """
         run_dir = Path(workspace) / goal_slug
         run_dir.mkdir(parents=True, exist_ok=True)
         path = run_dir / STATE_FILENAME
+        if path.exists() and not force:
+            raise FileExistsError(
+                f"a run already exists at {path} "
+                f"({_describe_existing_run(path)}). `init` writes a fresh document and "
+                f"would discard its trail, gates, artifacts and budget. Pick a different "
+                f"--goal slug for the new run (the folder's prose is unaffected), or pass "
+                f"--force to replace the state document on purpose."
+            )
         now = _now()
         data: dict[str, Any] = {
             "run_id": run_id or str(uuid.uuid4()),
@@ -389,7 +427,7 @@ def gate_pass(
 
 
 def bump(state: "LoopState", event: str) -> int:
-    """Increment the one Daniel cap the SessionStart hook can actually
+    """Increment the one soft cap the SessionStart hook can actually
     detect for this event (D4): `startup` bumps `fresh_sessions.used`,
     `compact` bumps `compactions.used`. Any other event is a no-op —
     returns 0 and does not save, because nothing changed. Returns the new
@@ -411,28 +449,21 @@ def bump(state: "LoopState", event: str) -> int:
         return 0
 
     budget = state.data.setdefault("budget", _default_budget())
-    cap_block = budget.setdefault(
-        cap_name,
-        _cap_block(
-            cap=DANIEL_CAPS[cap_name]["cap"],
-            is_measured=DANIEL_CAPS[cap_name]["is_measured"],
-            is_detected=DANIEL_CAPS[cap_name]["is_detected"],
-        ),
-    )
+    cap_block = budget.setdefault(cap_name, _cap_block(cap=SOFT_CAPS[cap_name]["cap"]))
     cap_block["used"] = cap_block.get("used", 0) + 1
     state.save()
     return cap_block["used"]
 
 
 def notify(state: "LoopState") -> list[str]:
-    """Check Daniel's four caps for crossing. Returns one line per crossed
+    """Check the soft caps for crossing. Returns one line per crossed
     cap (`used > cap`, and `cap` is not None/unset) naming the cap and the
     used-over-cap figures — never raises, never mutates or saves state, and
     never changes `status` (crossing notifies; it does not block, D4).
     Uncrossed and unset (`cap: None`) caps are silent."""
     budget = state.data.get("budget", {}) or {}
     lines: list[str] = []
-    for name in DANIEL_CAPS:
+    for name in SOFT_CAPS:
         block = budget.get(name) or {}
         cap = block.get("cap")
         used = block.get("used", 0)
@@ -451,7 +482,7 @@ def record_approval(
     """Record who was driving at this approval (SystemShape §11.8: `tier`
     and `human_present` are meant to be derived from the registry/session
     elsewhere in the loop; this verb persists whatever the caller supplies
-    as the current driver block). `authority` is granted by Daniel and
+    as the current driver block). `authority` is granted by the user and
     never self-elected — this verb records the grant, it does not create
     or check one (`confirm()` is what checks it)."""
     state.data["driver"] = {"tier": tier, "human_present": human_present, "authority": authority}
@@ -481,6 +512,7 @@ def record_kill(state: "LoopState", reason: str) -> None:
     state.data["kill"]["fired"] = True
     state.data["kill"]["reason"] = reason
     state.data["final_route"] = loop_terminal.terminal_route(state)
+    state.data["status"] = state.data["final_route"]
     state.save()
 
 
@@ -492,13 +524,14 @@ def descope(state: "LoopState", decision_ref: str) -> None:
     _ensure_not_already_ended(state)
     state.data["descope_decision_ref"] = decision_ref
     state.data["final_route"] = loop_terminal.terminal_route(state)
+    state.data["status"] = state.data["final_route"]
     state.save()
 
 
 def confirm(state: "LoopState", by: str, escaped: int = 0, caught: int = 0) -> None:
     """Move `live` to `done` — but only when authority is a human
     principal per the `driver` block. Authority to drive is granted by
-    Daniel and never self-elected (Plan T3.6 note); this verb checks that
+    the user and never self-elected (Plan T3.6 note); this verb checks that
     grant, it does not create it — recording WHO holds authority is
     `record_approval()`'s row, so `by` is accepted for CLI-call symmetry
     with the other two event verbs but is not itself what authorizes the
@@ -506,7 +539,7 @@ def confirm(state: "LoopState", by: str, escaped: int = 0, caught: int = 0) -> N
 
     `escaped`/`caught` (T3.6): live -> done is the loop's one
     "finished -> confirmed" transition (PRD §9.1's `live` is finished-but-
-    unconfirmed; `done` is Daniel-only and terminal), so this is the one
+    unconfirmed; `done` is user-only and terminal), so this is the one
     place `escape_rate` is written — PRD §8.1's
     escaped ÷ (escaped + caught), or null when both are zero rather than a
     division by zero. Defaults are 0/0 (null) so existing callers that pass
@@ -521,7 +554,7 @@ def confirm(state: "LoopState", by: str, escaped: int = 0, caught: int = 0) -> N
     if driver.get("authority") != "human":
         raise loop_terminal.IllegalEnding(
             "confirm requires driver.authority == 'human' "
-            "(authority is granted by Daniel, never self-elected)"
+            "(authority is granted by the user, never self-elected)"
         )
     total = escaped + caught
     state.data["escape_rate"] = (escaped / total) if total > 0 else None
@@ -552,6 +585,7 @@ def _cmd_init(args: argparse.Namespace) -> int:
         workspace=args.workspace,
         original_input=original_input,
         framework_version=args.framework_version,
+        force=args.force,
     )
     _refresh_drive_map(str(state.path))  # skeleton folders + first DRIVE_MAP.md from the first minute
     print(str(state.path))
@@ -651,7 +685,7 @@ def _cmd_gate_pass(args: argparse.Namespace) -> int:
         evidence["verifications_dir"] = (
             Path(args.verifications_dir)
             if args.verifications_dir
-            else node_gates.DEFAULT_VERIFICATIONS_DIR
+            else node_gates.default_verifications_dir(Path(args.path).resolve().parent)
         )
         if args.graph_snapshot:
             evidence["graph_snapshot"] = Path(args.graph_snapshot)
@@ -742,6 +776,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_init.add_argument("--input", required=True, help="path to a file holding the raw original_input text")
     p_init.add_argument("--workspace", required=True, help="parent directory; state lands at <workspace>/<goal>/loop.state.json")
     p_init.add_argument("--framework-version", default="unknown", dest="framework_version")
+    p_init.add_argument(
+        "--force", action="store_true",
+        help="replace an existing loop.state.json at this slug (discards its trail, gates, artifacts and budget)",
+    )
     p_init.set_defaults(func=_cmd_init)
 
     p_read = sub.add_parser("read", help="Print a loop.state.json as JSON.")
@@ -777,7 +815,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_gate_pass.add_argument(
         "--verifications-dir", default=None, dest="verifications_dir",
-        help="T4.8: verifier run-files directory (default: node_gates.DEFAULT_VERIFICATIONS_DIR)",
+        help="T4.8: verifier run-files directory (default: <run-dir>/misc/verifications)",
     )
     p_gate_pass.add_argument(
         "--graph-snapshot", default=None, dest="graph_snapshot",
@@ -826,11 +864,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_confirm.add_argument("--by", required=True, help="confirming identity")
     p_confirm.add_argument(
         "--escaped", type=int, default=0,
-        help="defects Daniel's principal-stage caught that our tests missed (PRD §8.1)",
+        help="defects the user's principal-stage caught that our tests missed (PRD §8.1)",
     )
     p_confirm.add_argument(
         "--caught", type=int, default=0,
-        help="defects our own tests caught before Daniel saw them (PRD §8.1)",
+        help="defects our own tests caught before the user saw them (PRD §8.1)",
     )
     p_confirm.set_defaults(func=_cmd_confirm)
 
@@ -842,7 +880,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_bump.set_defaults(func=_cmd_bump)
 
     p_notify = sub.add_parser(
-        "notify", help="Print one line per crossed Daniel cap. Never blocks; exits 0 always."
+        "notify", help="Print one line per crossed soft cap. Never blocks; exits 0 always."
     )
     p_notify.add_argument("path")
     p_notify.set_defaults(func=_cmd_notify)

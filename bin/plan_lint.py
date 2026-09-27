@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Lint Nova Caelum plan Markdown without project dependencies."""
+"""Lint loop plan Markdown without project dependencies."""
 
 from __future__ import annotations
 
@@ -330,7 +330,7 @@ def lint_text(text: str) -> list[Violation]:
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Lint one Nova Caelum plan Markdown file.")
+    parser = argparse.ArgumentParser(description="Lint one loop plan Markdown file.")
     parser.add_argument("plan", type=Path, help="Markdown plan to lint")
     return parser
 

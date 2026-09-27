@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://novacaelum.com/schemas/loop-state/1",
-  "title": "Nova Caelum framework — loop.state.json",
-  "description": "T3.1 (ncf-m3-state-object). Machine-readable position for one multi-session loop run. Mirrors _agentOS/graph_library/contracts/run.py's MachineRun field-for-field where meaning matches (run_id, original_input, input_hash, status, current_node); framework_version plays machine_version's role. status uses PRD_NovaCaelumFramework_ChiefPM_2026-08-27.md #9.1's LoopStatus set, not run.py's RunStatus — the two enums diverge deliberately (see Engineer_Notes_T3.1_2026-09-06.md field-mirroring table). Validated by system/bin/loop_state.py's hand-rolled minimal draft-07 subset (required/type/enum/properties/items only) — see that file's module docstring for why.",
+  "$id": "https://github.com/Nova-Caelum/hyperspace-engine/schemas/loop-state/1",
+  "title": "hyperspace-engine — loop.state.json",
+  "description": "T3.1 (ncf-m3-state-object). Machine-readable position for one multi-session loop run. Mirrors the Graph Machine contract graph_library/contracts/run.py's MachineRun field-for-field where meaning matches (run_id, original_input, input_hash, status, current_node); framework_version plays machine_version's role. status uses the framework PRD's #9.1 LoopStatus set, not run.py's RunStatus — the two enums diverge deliberately (see the T3.1 engineering notes' field-mirroring table). Validated by bin/loop_state.py's hand-rolled minimal draft-07 subset (required/type/enum/properties/items only) — see that file's module docstring for why.",
   "type": "object",
   "required": [
     "run_id", "goal_slug", "framework_version", "original_input", "input_hash",
@@ -15,7 +15,7 @@
       "type": "string"
     },
     "goal_slug": {
-      "description": "The <goal-slug> in workspace/<goal-slug>/loop.state.json. Also this run's directory name.",
+      "description": "The <goal-slug> in <runs-dir>/<goal-slug>/loop.state.json. Also this run's directory name.",
       "type": "string"
     },
     "framework_version": {
@@ -85,60 +85,34 @@
       }
     },
     "budget": {
-      "description": "T3.6 (ncf-m3-budget-counters) fills the counting behavior; this shape is declared now. Four Daniel caps plus three round/retry counters.",
+      "description": "T3.6 (ncf-m3-budget-counters) fills the counting behavior; this shape is declared now. Two counted soft caps plus three round/retry counters. Only measured fields are written (S1, bin/PORT_NOTES.md): a cap nothing observes is not in the file.",
       "type": "object",
       "required": [
-        "fresh_sessions", "compactions", "daniel_hours", "worklog_entries",
+        "fresh_sessions", "compactions",
         "rework_rounds", "doubled_back_rounds", "doubled_back_events", "stage_retries"
       ],
       "properties": {
         "fresh_sessions": {
-          "description": "T3.6 (ncf-m3-budget-counters). Daniel's cap: 1, per task. `_is_measured: false` — a provisional number, not a measured one (PRD §6.3). `_is_detected: true` — the SessionStart hook observes `source=startup` and calls `bump --event startup`.",
+          "description": "T3.6 (ncf-m3-budget-counters). Soft cap: 1, per task (a provisional number, PRD §6.3). Counted: the SessionStart hook observes `source=startup` and calls `bump --event startup`.",
           "type": "object",
-          "required": ["cap", "used", "_is_measured", "_is_detected"],
+          "required": ["cap", "used"],
           "properties": {
             "cap": { "type": ["number", "null"] },
-            "used": { "type": "number" },
-            "_is_measured": { "type": "boolean" },
-            "_is_detected": { "type": "boolean" }
+            "used": { "type": "number" }
           }
         },
         "compactions": {
-          "description": "T3.6 (ncf-m3-budget-counters). Daniel's cap: 1, per task. `_is_measured: false` — a provisional number, not a measured one (PRD §6.3). `_is_detected: true` — the SessionStart hook observes `source=compact` and calls `bump --event compact`.",
+          "description": "T3.6 (ncf-m3-budget-counters). Soft cap: 1, per task (a provisional number, PRD §6.3). Counted: the SessionStart hook observes `source=compact` and calls `bump --event compact`.",
           "type": "object",
-          "required": ["cap", "used", "_is_measured", "_is_detected"],
+          "required": ["cap", "used"],
           "properties": {
             "cap": { "type": ["number", "null"] },
-            "used": { "type": "number" },
-            "_is_measured": { "type": "boolean" },
-            "_is_detected": { "type": "boolean" }
-          }
-        },
-        "daniel_hours": {
-          "description": "T3.6 (ncf-m3-budget-counters). Daniel's cap: 2 real-time hours, per task. `_is_measured: false` — a provisional number, not a measured one (PRD §6.3). `_is_detected: false` and stays false: nothing in this system observes a real-time hour elapsing, so this cap is advisory only (PRD §6.2's own rule — an undetected cap is visibly advisory, not quietly decorative) and `used` is never bumped by any code path here.",
-          "type": "object",
-          "required": ["cap", "used", "_is_measured", "_is_detected"],
-          "properties": {
-            "cap": { "type": ["number", "null"] },
-            "used": { "type": "number" },
-            "_is_measured": { "type": "boolean" },
-            "_is_detected": { "type": "boolean" }
-          }
-        },
-        "worklog_entries": {
-          "description": "T3.6 (ncf-m3-budget-counters). Daniel's cap: 3 worklog entries, per task. `_is_measured: false` — a provisional number, not a measured one (PRD §6.3). `_is_detected: false` and stays false: nothing in this system observes a worklog append happening, so this cap is advisory only (PRD §6.2's own rule — an undetected cap is visibly advisory, not quietly decorative) and `used` is never bumped by any code path here.",
-          "type": "object",
-          "required": ["cap", "used", "_is_measured", "_is_detected"],
-          "properties": {
-            "cap": { "type": ["number", "null"] },
-            "used": { "type": "number" },
-            "_is_measured": { "type": "boolean" },
-            "_is_detected": { "type": "boolean" }
+            "used": { "type": "number" }
           }
         },
         "rework_rounds": { "type": "integer" },
         "doubled_back_rounds": {
-          "description": "T3.2 (ncf-m3-artifact-freeze). Incremented by check_frozen() (system/bin/loop_state.py) on every frozen-artifact hash mismatch it discovers — never by an argument telling it a change happened.",
+          "description": "T3.2 (ncf-m3-artifact-freeze). Incremented by check_frozen() (bin/loop_state.py) on every frozen-artifact hash mismatch it discovers — never by an argument telling it a change happened.",
           "type": "integer"
         },
         "doubled_back_events": {
@@ -176,7 +150,7 @@
       }
     },
     "descope_decision_ref": {
-      "description": "T3.5 (ncf-m3-kill-predicate). Set by the `descope` event verb (system/bin/loop_state.py); a pointer to where the descope decision is recorded, per PRD #9.3 ('the decision is recorded in loop.state.json, not remembered'). Null until a descope decision exists. Presence (not content) is what terminal_route() in loop_terminal.py consults — cause-blind by the same rule as `kill.reason`.",
+      "description": "T3.5 (ncf-m3-kill-predicate). Set by the `descope` event verb (bin/loop_state.py); a pointer to where the descope decision is recorded, per PRD #9.3 ('the decision is recorded in loop.state.json, not remembered'). Null until a descope decision exists. Presence (not content) is what terminal_route() in loop_terminal.py consults — cause-blind by the same rule as `kill.reason`.",
       "type": ["string", "null"]
     },
     "final_route": {

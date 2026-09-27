@@ -58,8 +58,8 @@ Ported from `sprint-manager/references/handoff-prompt-template.md` (internal). E
 
 ## What changed from the sprint-manager template
 
-Dropped: phase/variant vocabulary, `sprint-manager-v2-fired` telemetry tags, `DANIEL_INPUT.md` (rulings go to `BUILD_LEDGER.md` and reach Daniel in the node's final "Rulings I made" list), the sprint-folder reference implementations. Added: loop position line, typed-criteria-verbatim rule, the implementer contract, the report-file RED/GREEN requirement, trigger tokens.
+Dropped: phase/variant vocabulary, `sprint-manager-v2-fired` telemetry tags, the principal-input file (rulings go to `BUILD_LEDGER.md` and reach the user in the node's final "Rulings I made" list), the sprint-folder reference implementations. Added: loop position line, typed-criteria-verbatim rule, the implementer contract, the report-file RED/GREEN requirement, trigger tokens.
 
 ## Source
 
-`sprint-manager/references/handoff-prompt-template.md` (Nova Caelum, v2 2026-06-27; itself preserved from v1 2026-04-26) · dispatch discipline from obra/superpowers `subagent-driven-development` 6.3.0 (MIT) §"Dispatch the implementer" · PM-3 trigger-token embedding (chief-pm persona).
+the retired sprint-manager skill's handoff-prompt template (v2 2026-06-27; itself preserved from v1 2026-04-26) · dispatch discipline from obra/superpowers `subagent-driven-development` 6.3.0 (MIT) §"Dispatch the implementer" · PM-3 trigger-token embedding (the planning agent's own practice).

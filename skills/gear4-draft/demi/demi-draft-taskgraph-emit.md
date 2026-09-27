@@ -7,14 +7,14 @@ derives_from: none
 
 <!--
   DEMI-SKILL. Bundled behind the N3 Draft node skill. NOT independently invocable.
-  Template: _agentOS/skills_library/_meta/templates/demi-skill.template.md
-  Mechanism: _agentOS/system/bin/taskgraph_emit.py
+  Template: the engine's demi-skill template
+  Mechanism: bin/taskgraph_emit.py
   Status: mechanism BUILT AND PROVEN (2026-08-27, live write verified, row 1493cc28).
           Parent node skill `gear4-draft` AUTHORED 2026-09-07 (T4.5) — this demi is its
           step 4. Wiring-chain layers 3-9: M5.
-  Lineage: derives_from is `none` (Daniel, 2026-09-08 — `sprint-manager` is retired
-          and nothing routes to or leans on it). The mechanism is Daniel-directed
-          (ForkNote 2026-08-27); the dispatch shape is the demi-skill template's.
+  Lineage: derives_from is `none` (the author, 2026-09-08 — `sprint-manager` is retired
+          and nothing routes to or leans on it). The mechanism is author-directed
+          (an internal fork note, 2026-08-27); the dispatch shape is the demi-skill template's.
 -->
 
 # demi-draft-taskgraph-emit
@@ -24,7 +24,7 @@ derives_from: none
 You are closing **N3 Draft**. A PRD and a Plan exist. Your job is to make the plan
 *tracked work* rather than a document.
 
-**This is a gate, not a convenience.** Daniel, 2026-08-27: *"taskgraph emit should be
+**This is a gate, not a convenience.** The author, 2026-08-27: *"taskgraph emit should be
 the end of the draft node. It signals and gates transition to the next node. We do not
 build if there's no guide in the task graph."*
 
@@ -34,15 +34,15 @@ N3 does not close until every plan step exists as a row. If this fails, the node
 Every prior stall in this system has one shape: a planning artifact exists on disk and
 nothing downstream ever reads it. `make-it-happen` has zero formal invocations and one
 artifact trail dead at P2. `superpowers:writing-plans` has zero invocations ever, and
-its mandated output directory does not exist anywhere in the vault. **A plan that never
+its mandated output directory never existed anywhere in the source workspace. **A plan that never
 becomes tracked work is indistinguishable from a plan nobody wrote.**
 
 ### Anchor docs
 
-- `AgentSecretBase/workspace/hyperspace-engine_new_sprintframework/PRD_NovaCaelumFramework_ChiefPM_2026-08-27.md` §3.3 — why this is a gate
-- `AgentSecretBase/workspace/hyperspace-engine_new_sprintframework/ForkNote_WorkplanUploader_ChiefPM_2026-08-27.md` — the three-stage design and its decisions
-- `_agentOS/graph_library/contracts/candidate.py` — `CandidateWorkItem`, the live contract this validates against
-- `_agentOS/skills_library/taskgraph-placement/SKILL.md` — module vs work_item, if a plan step's level is genuinely unclear
+- source: the framework PRD, 2026-08-27, §3.3 — why this is a gate
+- source: an internal fork note on the workplan uploader, 2026-08-27 — the three-stage design and its decisions
+- `hyperspace/contracts/candidate.py` (in the plugin) — `CandidateWorkItem`, the contract this validates against
+- the `taskgraph-placement` skill — module vs work_item, if a plan step's level is genuinely unclear
 
 ## Your task
 
@@ -65,8 +65,8 @@ Emit one JSON file:
 ```jsonc
 {
   "project": "<projects.code>",
-  "source_plan": "<vault-root-relative path to the Plan doc>",
-  "source_prd":  "<vault-root-relative path to the PRD>",
+  "source_plan": "<project-root-relative path to the Plan doc>",
+  "source_prd":  "<project-root-relative path to the PRD>",
   "modules": [
     { "external_id": "...", "name": "...",
       "acceptance_criteria": "<prose, 20-2000 chars>", "state": "ready" }
@@ -128,8 +128,8 @@ Rules the script enforces, so getting them right first is cheaper:
 ### 3. Emit — run the script
 
 ```bash
-python3 _agentOS/system/bin/taskgraph_emit.py plan  <workplan.json>   # dry run
-python3 _agentOS/system/bin/taskgraph_emit.py apply <workplan.json> --yes
+.hyperspace/env/bin/python "${CLAUDE_PLUGIN_ROOT}/bin/taskgraph_emit.py" plan  <workplan.json>   # dry run
+.hyperspace/env/bin/python "${CLAUDE_PLUGIN_ROOT}/bin/taskgraph_emit.py" apply <workplan.json> --yes
 ```
 
 Read the dry run before applying. Then apply. `--yes` is there because the dry run you just read IS the confirmation; without it `apply` waits on stdin for the word `file`, which an agent's shell never sends — the command hangs.
@@ -166,15 +166,15 @@ Read the dry run before applying. Then apply. `--yes` is there because the dry r
 
 ## How the write reaches the Task Graph
 
-Through **`ops_upload_workplan`** — a batch verb on ops-server 0.9.4, scoped to the
-dedicated `workplan-uploader` identity, absent from `tools/list`, and gated on resolved
+Through **`ops_upload_workplan`** — a batch verb on the source engine's graph service
+(0.9.4), scoped to the dedicated `workplan-uploader` identity, absent from `tools/list`, and gated on resolved
 client identity before the body is parsed.
 
 **It deliberately ignores `conversion_stage` and the canary-persona list.** That is the
 whole reason it exists. Until 2026-08-27 this gate wrote through `upsert_work_item`,
 which branches on the candidate's **self-reported** `proposer_identity`: a payload
-proposed by `chief-pm` filed a row, and the byte-identical payload proposed by
-`engineer` returned an `AdmissionReceipt` and filed nothing — while the gate printed
+proposed by one agent identity filed a row, and the byte-identical payload proposed by
+another returned an `AdmissionReceipt` and filed nothing — while the gate printed
 PASS. Proven by controlled test, one variable, same server, same hour.
 
 Two consequences worth keeping in view:
@@ -191,8 +191,8 @@ Two consequences worth keeping in view:
 
 ## Source
 
-Daniel-directed 2026-08-27, mid-PRD-review: *"some deterministic mechanism that takes a
+Author-directed 2026-08-27, mid-PRD-review: *"some deterministic mechanism that takes a
 finished plan and faithfully and accurately adds it to taskgraph is essential. And a
-gap."* Design and split recorded in `ForkNote_WorkplanUploader_ChiefPM_2026-08-27.md`.
-Mechanism proven end to end the same day against `graph-machine-testbed` — module
+gap."* Design and split recorded in an internal fork note, 2026-08-27.
+Mechanism proven end to end the same day against an internal testbed project — module
 `b4aa7551`, work item `1493cc28`.

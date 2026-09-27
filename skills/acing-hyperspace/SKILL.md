@@ -23,17 +23,17 @@ Invoke the relevant or requested skill BEFORE any response or action — a clari
 
 ## Skill Priority
 
-Process before implementation. When the work has a shape the loop recognizes, the loop node fires FIRST and sets the approach; domain skills execute inside it. The node is the only way in — the demi documents behind it are not doors.
+Process before implementation. When the work has a shape the loop recognizes, the loop node fires FIRST and sets the approach; domain skills execute inside it. The node is the only way in — the demi documents behind it are not doors. A run lives in its own folder, `<project>/hyperspace/runs/<slug>/`, which holds its `loop.state.json`.
 
 <!-- ROUTING BLOCK — the only node-coupled section. A stage change REPLACES this block; touch nothing else. -->
 
 | The work in front of you | Enter |
 |---|---|
-| A goal nobody has framed — a feature, subsystem, tool, a "should we"; Daniel says "let's figure out what we're building", "spec this out", "is this worth doing"; no `loop.state.json` for it, or one reading `current_node: framing` | `gear2-understand` |
+| A goal nobody has framed — a feature, subsystem, tool, a "should we"; the user says "let's figure out what we're building", "spec this out", "is this worth doing"; no `loop.state.json` for it, or one reading `current_node: framing` | `gear2-understand` |
 | Tests frozen, design open — "what are our options", "sketch the architecture", "cut this to v1"; the run reads `current_node: understanding`, gate passed | `gear3-decide` |
 | Decision frozen, nothing filed — "write the PRD", "write the plan", "file the rows"; the run reads `current_node: deciding`, gate passed | `gear4-draft` |
 | Rows filed, software owed — "build it", "execute the plan", "run the rows"; the run reads `current_node: specifying`, gate passed, or a `BUILD_LEDGER.md` has rows not yet `complete` | `gear5-build` |
-| Build finished, Daniel's test owed — the run reads `status: live`, or the Build gate just exited 0 | `gear6-live` |
+| Build finished, the user's test owed — the run reads `status: live`, or the Build gate just exited 0 | `gear6-live` |
 
 Between two nodes, enter the earlier one: hidden complexity upgrades forward; nothing downgrades mid-task. Route by the work's own run, never another run's banner line; there, `status: live` outranks every row above it: a finished run never re-enters Build. Ceremony scales with the task; the gate never does. A failure whose cause is known is debugging, not a node; a value inside a filed row belongs to Build, not to a new run.
 
@@ -53,6 +53,6 @@ These thoughts mean STOP — you are rationalizing:
 | "I remember what that skill says." | The one-row summary is what fired last time, not the body. Read the one on disk. |
 | "The table told me what to do; I did it." | The table names doors, never steps. Enter the node; the node has the steps. |
 
-## Daniel's Instructions
+## The User's Instructions
 
-Daniel's instructions — the standing rules, CLAUDE.md, what he says in the session — override skills; skills override default behavior. Skip a skill's workflow only when he says so explicitly.
+The user's instructions — the standing rules, CLAUDE.md, what they say in the session — override skills; skills override default behavior. Skip a skill's workflow only when they say so explicitly.
