@@ -1,153 +1,160 @@
 # 09 — Future states
 
-What is unfinished, what is undecided, and what would have to change for each to resolve.
+Where the engine goes next, and the questions that are still open.
 
-This file is not a roadmap and carries no commitments. It exists because a system that only documents
-its finished parts is harder to trust than one that names its open edges. Where something is a
-genuine open question rather than a queued task, it says so — an open question with two defensible
-answers is more useful to a reader than a confident promise.
+Every design worth trusting has edges its authors can name. This file names them — not as a confession
+but as the working agenda, because a reader who can see the open questions can tell the difference
+between a decision and an accident, and can contribute to the ones that are still live.
 
----
-
-## 1. The loop's own acceptance test has not been run
-
-The engine holds work to a standard it has not yet met itself.
-
-**The test:** a human drives a real goal through all four gated stages, starting from the
-session-start primer alone, without opening a skill file to learn what the next step is. No
-intervention to explain the loop to the agent mid-run.
-
-**Why it is the right test:** everything else measurable about this system — tests passing, gates
-refusing correctly, state transitions holding — verifies the machine. This verifies the *design*. If
-a human has to explain the loop to the agent that is supposed to be running inside it, the routing
-has failed regardless of how well the state machine behaves.
-
-**Status:** not run. When it runs, the result gets recorded whichever way it goes. Publishing the gate
-you have not yet passed is the point.
+Nothing here is a commitment or a dated roadmap. Where something is a genuine open question with two
+defensible answers, it says so.
 
 ---
 
-## 2. `verifying` has no gate
+## 1. The next milestone: the loop drives itself
 
-`verifying` sits in the status vocabulary with no check registered against it. It is unused.
+The engine holds work to a standard, and the most interesting test of the design is whether it meets
+that standard for its own operation.
 
-Two defensible resolutions, and the choice has not been made:
+**The test:** a human drives a real goal through all four gated stages starting from the session-start
+primer alone — no opening a skill file to learn what comes next, no intervention to explain the loop
+to the agent mid-run.
 
-- **Register a check.** There is a plausible station between "built" and "handed over" — an automated
-  verification pass distinct from both the Build gate and the human's acceptance test.
-- **Remove it.** An unused value in a closed vocabulary is a small, permanent invitation to
-  misinterpretation.
+**Why this is the right test.** Everything else measurable here verifies the machine: tests pass,
+gates refuse correctly, state transitions hold. This verifies the *routing* — whether an agent dropped
+into a session finds its way to the right station without a human narrating the process. That is the
+claim the whole design rests on, and it is the one thing a unit test cannot establish.
 
-It was left in rather than quietly deleted, on the reasoning that a vocabulary which silently loses
-values is harder to trust than one that admits a spare. That reasoning justifies the current state; it
-does not settle the question.
-
----
-
-## 3. The node track stops at `executing` — permanently?
-
-`current_node` never advances past `executing`. That is deliberate and it is what lets a build end
-without the agent judging itself finished (see `01_introduction.md` §3).
-
-The open question is whether that is the final shape or an artifact of there being nothing to model
-after the build. If a future station sits past the build — a verification pass, a deployment stage, a
-post-acceptance step — the node track would need to move again, and the two-axis design would need
-re-examining rather than extending. It currently reads as an invariant. It has not been tested against
-a fifth gated station, because there isn't one.
+**Status:** scheduled, not yet run. The result will be recorded here whichever way it goes. A project
+that only publishes the gates it has already passed is not telling you much.
 
 ---
 
-## 4. Two budget counters are aspirational
+## 2. `verifying` — a reserved station
 
-Of the four budget counters, two are detected automatically at session start (`fresh_sessions`,
-`compactions`) and two are not (`daniel_hours`, `worklog_entries`). The undetected pair has a cap and
-no incrementer.
+`verifying` exists in the status vocabulary with no gate registered against it. It is currently
+unused, and it was kept rather than removed.
 
-A cap nothing increments is not a measurement. Each counter carries an explicit `is_detected` flag
-precisely so a reader can tell which numbers are real — that is honest, but it is a label on a gap
-rather than a fix. Resolving it means either wiring real detection or dropping the caps and admitting
-the dimension is unmeasured.
+There is a plausible station between "built" and "handed to a human" — an automated verification pass
+distinct from both the Build gate and the human's acceptance test. Whether that station should exist
+is genuinely open:
 
-`daniel_hours` also carries the personalisation question below.
+- **Register a check**, and the vocabulary becomes complete.
+- **Remove the value**, and the vocabulary becomes tight.
 
----
-
-## 5. Personalisation is deliberate, and its future is undecided
-
-The skills address a specific human by name. A budget counter is called `daniel_hours`. This is not an
-oversight: nearly every rule in the loop is scar tissue from a specific session that went wrong for a
-specific person, and sanding the personalisation off would make the rules read as though they had been
-designed in the abstract — which would misrepresent where they came from and quietly remove the
-evidence that each one has a source.
-
-The open question is what happens as the engine is adopted by people who are not that person. Three
-directions exist, and no decision has been recorded:
-
-- keep it verbatim, and let the specificity be the credential
-- template the identity, keeping the incidents that motivated each rule
-- separate the rule from its provenance, so the rule generalises and the scar tissue stays cited
-
-The third is the most work and probably the most correct. None is chosen.
+The value was kept on the reasoning that a closed vocabulary which silently drops entries is harder to
+trust than one carrying a documented spare. That justifies today's state; it does not settle the
+question, and the question is worth settling deliberately rather than by default.
 
 ---
 
-## 6. HOLD exists at one gate only
+## 3. Whether the node track ever moves again
 
-Exit 3 (HOLD) is Build-only. The `understanding`, `deciding` and `specifying` checks state explicitly
-that they have no hold path — they pass or they refuse.
+`current_node` stops at `executing` by design — that is what allows a build to end without the agent
+judging itself finished ([`01_introduction.md`](01_introduction.md) §3).
 
-That is coherent today, because manual criteria attach to filed rows and rows exist only after the
-plan is filed. Whether the earlier stations would benefit from a hold path — a way to say *this needs
-a human before it can proceed, and here is exactly what to ask* — is unexamined. The Build gate's HOLD
-turned out to be one of the more useful things in the design, which is weak evidence that the earlier
-gates might want it too, and weak evidence is not a reason to build it.
+The open question is whether that is permanent. If a station ever sits past the build — a verification
+pass, a deployment stage, a post-acceptance step — the node track would need to advance again, and the
+two-axis model would deserve a fresh look rather than a quiet extension. Today it reads as an
+invariant, and it has not yet been tested against a fifth gated station, because there is not one.
 
----
-
-## 7. A run cannot be resumed once it has ended
-
-Endings are one-way by construction. There is no `resume` verb: reviving an ended run means editing
-the state file by hand, deliberately.
-
-This is the intended asymmetry — an ending should be hard to undo by accident. But it means a run
-descoped for resource reasons and later picked back up has no first-class path. The current answer is
-to open a new run whose input is the old run's frozen artifacts, which preserves both records and
-loses the continuity between them. Whether that is right, or whether a real resume belongs in the
-design, is open.
+Worth flagging for anyone extending the engine: this is the assumption most likely to bind.
 
 ---
 
-## 8. Documentation that cannot drift
+## 4. Budget measurement is partial, and labelled as such
 
-The precision documents in `reference/` — state fields, CLI verbs, gate contracts, status vocabulary
-— are generated from source, with a test that regenerates and asserts the committed copy matches.
-Drift becomes a failing CI check rather than a reader's wasted afternoon.
+Four budget counters exist. Two are detected automatically at session start (`fresh_sessions`,
+`compactions`). Two are not (`daniel_hours`, `worklog_entries`) — they carry a cap and no incrementer.
 
-The numbered files in this folder are hand-written and carry no such guarantee. They describe
-concepts and rationale, which is the class of content that ages slowly — but "slowly" is not "never",
-and there is no mechanism that catches it when they do. A concept document that has quietly stopped
-being true is exactly as misleading as a wrong exit code and considerably harder to detect.
+**Each counter states which it is.** The `is_detected` flag exists precisely so a reader can tell a
+measured number from an intended one, and that is the right behaviour for a system that refuses to let
+an agent assert things it has not checked — the same standard, applied to itself.
 
-No mechanism for this exists and none is obviously correct.
+The next step is to either wire real detection for the undetected pair or retire their caps. Carrying a
+labelled gap is honest; closing it is better.
+
+---
+
+## 5. Personalisation: a deliberate choice with an open horizon
+
+The skills address a specific human by name. A budget counter is called `daniel_hours`.
+
+This is intentional. Close to every rule in the loop is scar tissue from a specific session that went
+wrong for a specific person. Generalising the language would make the rules read as though they had
+been designed in the abstract, which would misrepresent where they came from and remove the evidence
+that each one has a source. The specificity is part of the credential.
+
+As the engine is adopted more widely, three directions are available:
+
+- **Keep it verbatim** — the specificity stays the credential.
+- **Template the identity** — keep the incidents that motivated each rule, generalise the name.
+- **Separate rule from provenance** — the rule generalises; the incident stays cited beside it.
+
+The third is the most work and probably the most correct. The decision is open, and adopter experience
+is the input that should drive it.
+
+---
+
+## 6. HOLD at one gate, and whether it belongs at more
+
+Exit 3 (HOLD) is Build-only. The earlier three checks state explicitly that they have no hold path.
+
+That is coherent: manual criteria attach to filed rows, and rows exist only after the plan is filed.
+But HOLD has turned out to be one of the more useful mechanisms in the design — a structured way to
+say *a human is needed here, and this is exactly what to ask them* — which is suggestive rather than
+conclusive about whether the earlier stations want the same affordance.
+
+Suggestive is not a mandate. Noted, not built.
+
+---
+
+## 7. Resuming a run that has ended
+
+Endings are one-way by construction, and there is no `resume` verb. Reviving an ended run means
+editing the state file deliberately, by hand.
+
+The asymmetry is intended: an ending should be hard to undo by accident. What it means in practice is
+that a run descoped for resource reasons and later picked back up has no first-class path. The current
+answer — open a new run whose input is the old run's frozen artifacts — preserves both records
+completely and loses the continuity between them.
+
+Whether a real resume belongs in the design, or whether the two-records outcome is actually the more
+honest one, is open.
+
+---
+
+## 8. Drift protection, and where it stops
+
+The precision documents in [`reference/`](reference/) are generated from source, with a test that
+regenerates them and asserts the committed copy matches. Documentation drift becomes a failing CI
+check rather than a reader's wasted afternoon. That is the strongest guarantee in this folder.
+
+The numbered files carry no such guarantee. They describe concepts and rationale — content that ages
+slowly, but not never. A concept document that has quietly stopped being true misleads exactly as much
+as a wrong exit code and is considerably harder to detect.
+
+Extending mechanical verification from the reference set to the narrative set is an open design
+problem, and an interesting one. No approach is obviously correct yet.
 
 ---
 
 ## 9. In flight
 
-Work under way at the time of writing, named here so a reader can tell what is imminent from what is
-speculative:
+Work under way at the time of writing, separated from the speculative:
 
-- **Dependency removal.** The engine's two external dependencies are being removed so it runs on its
-  own. `03_architecture.md` and `06_adaptation_notes.md` are written against the result and are the
-  authority on what actually changed — this line is a pointer, not a description.
-- **Generated reference set.** `reference/` and its drift test, per §8.
-- **Root `CLAUDE.md`.** So an adopter's own Claude Code session knows it is inside a hyperspace-engine
-  checkout and how to behave there.
+- **Standalone operation.** The engine's external dependencies are being removed so it runs on its
+  own. [`03_architecture.md`](03_architecture.md) and [`06_adaptation_notes.md`](06_adaptation_notes.md)
+  are written against the result and are authoritative on what changed — this is a pointer, not a
+  description.
+- **Generated reference set.** [`reference/`](reference/) and its drift test, per §8.
+- **Root `CLAUDE.md`.** So an adopter's own Claude Code session recognises a hyperspace-engine checkout
+  and behaves correctly inside it.
 
 ---
 
 | | |
 |---|---|
 | **Back to** | [`00_start_here.md`](00_start_here.md) |
-| **What is actually here now** | [`03_architecture.md`](03_architecture.md) |
-| **What was changed in adaptation** | [`06_adaptation_notes.md`](06_adaptation_notes.md) |
+| **What is here now** | [`03_architecture.md`](03_architecture.md) |
+| **What adaptation changed** | [`06_adaptation_notes.md`](06_adaptation_notes.md) |
