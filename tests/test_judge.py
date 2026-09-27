@@ -76,6 +76,33 @@ def test_write_config_round_trips(tmp_path):
     assert (cfg.judge, cfg.model, cfg.port, cfg.user) == ("anthropic", "claude-x", 8123, "bob")
 
 
+def test_write_config_preserves_unknown_top_level_keys(tmp_path):
+    """A re-provision (`init --provision`, or the setup skill re-run) must
+    never silently delete a coupling key `write_config` doesn't itself own —
+    `worklog_owner` / `worklog_mirror_dir` / `worklog_default_project`
+    (v0.1.1 part A + v0.1.2) are read raw by other modules and carry no
+    field on `Config`; the joint plan with a sibling plugin rests on these
+    surviving a config rewrite untouched (v0.1.2 fix)."""
+    config_path = tmp_path / ".hyperspace" / "config.toml"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text(
+        'judge = "none"\n'
+        'port = 8791\n'
+        'user = "user"\n'
+        'worklog_owner = "technical-cofounder"\n'
+        'worklog_mirror_dir = "worklog/entries"\n',
+        encoding="utf-8",
+    )
+
+    write_config(tmp_path, port=9000)
+
+    text = config_path.read_text(encoding="utf-8")
+    assert 'worklog_owner = "technical-cofounder"' in text
+    assert 'worklog_mirror_dir = "worklog/entries"' in text
+    cfg = load_config(tmp_path)
+    assert cfg.port == 9000
+
+
 # ── (b) get_judge resolves all five ──────────────────────────────────────
 
 

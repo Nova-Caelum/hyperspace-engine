@@ -127,7 +127,7 @@ setup skill, together with its dependencies (`pydantic`, `pydantic-graph`, `pyda
 | `mcp/` | The stdio MCP server. Lists `complete_workitem` plus every graph tool, answers against the store, and starts the loopback door on first use. |
 | `http/` | The loopback door (`server.py`) and its routes (`routes.py`): REST reads under `/api/…`, JSON-RPC writes on `POST /mcp`, the console page on `/`. |
 | `setup/` | Provisioning (`provision.py`), the stdlib-only bootstrap entrypoint (`python -m hyperspace.setup`), `doctor`, and the three launcher templates. |
-| `cli.py` · `config.py` | The `hyperspace` command (`init`, `serve`, `doctor`) and `.hyperspace/config.toml` (`judge`, `model`, `port`, `user`). |
+| `cli.py` · `worklog_cli.py` · `config.py` | The `hyperspace` command (`init`, `serve`, `doctor`, `worklog`) and `.hyperspace/config.toml` (`judge`, `model`, `port`, `user`). |
 
 The full tool list with arguments is [`reference/mcp-tools.md`](reference/mcp-tools.md); the commands
 are in [`reference/cli.md`](reference/cli.md).

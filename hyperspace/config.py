@@ -108,7 +108,15 @@ def write_config(project_dir: str | Path, **fields: Any) -> Path:
     """Writes `.hyperspace/config.toml` by hand — no `tomli_w` dependency
     (the brief's decision; this is the only writer the setup skill needs).
     Any field omitted keeps its current value (read via `load_config`, or the
-    default if the file does not exist yet)."""
+    default if the file does not exist yet).
+
+    Every top-level key this function does not itself own (e.g.
+    `worklog_owner`, `worklog_mirror_dir`, `worklog_default_project` —
+    read raw by other modules, per `Config`'s own module docstring on why
+    those never get a field here) is preserved verbatim across a rewrite.
+    Without this, a re-provision (`init --provision`, a setup-skill re-run)
+    would silently delete any such key the day it becomes load-bearing for a
+    sibling plugin's coupling to this one (v0.1.2 fix)."""
     project_dir = Path(project_dir)
     current = load_config(project_dir)
     merged = {
@@ -121,11 +129,22 @@ def write_config(project_dir: str | Path, **fields: Any) -> Path:
         raise ValueError(f"unknown judge {merged['judge']!r} — must be one of: {', '.join(JUDGES)}")
 
     path = _config_path(project_dir)
+    extra: dict[str, Any] = {}
+    if path.is_file():
+        try:
+            with path.open("rb") as fh:
+                raw = tomllib.load(fh)
+            extra = {k: v for k, v in raw.items() if k not in merged}
+        except (OSError, tomllib.TOMLDecodeError):
+            extra = {}
+
     path.parent.mkdir(parents=True, exist_ok=True)
     lines = [f"judge = {_toml_scalar(merged['judge'])}"]
     if merged["model"] is not None:
         lines.append(f"model = {_toml_scalar(merged['model'])}")
     lines.append(f"port = {_toml_scalar(int(merged['port']))}")
     lines.append(f"user = {_toml_scalar(merged['user'])}")
+    for key, value in extra.items():
+        lines.append(f"{key} = {_toml_scalar(value)}")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return path

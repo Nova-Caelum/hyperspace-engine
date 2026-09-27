@@ -201,3 +201,67 @@ Pre-gate validator for an N1 `tests.json` (the Understand node's step 6).
 | Argument | Required | Notes |
 |---|---|---|
 | `--dir` | no | default `.` |
+
+### `hyperspace worklog`
+
+`hyperspace worklog append\|recent\|search\|import\|mirror [--json] [--dir <project-dir>]` — the CLI contract a sibling plugin (unable to call this plugin's MCP tools) shells out to instead; see docs/reference/tripwires.md for the three config keys it honours.
+
+#### `hyperspace worklog append`
+
+append one worklog row
+
+| Argument | Required | Notes |
+|---|---|---|
+| `--dir` | no | project directory (default cwd) — default `.` |
+| `--json` | no | emit one JSON object on stdout |
+| `--author` | yes |  |
+| `--summary` | yes |  |
+| `--project` | no | default: config key worklog_default_project, or 'workspace' |
+| `--detail` | no |  |
+| `--tags` | no | comma-separated |
+| `--work-item-id` | no |  |
+
+#### `hyperspace worklog recent`
+
+most recent rows, newest first
+
+| Argument | Required | Notes |
+|---|---|---|
+| `--dir` | no | project directory (default cwd) — default `.` |
+| `--json` | no | emit one JSON object on stdout |
+| `--limit` | no | default `10` |
+
+#### `hyperspace worklog search`
+
+filter rows
+
+| Argument | Required | Notes |
+|---|---|---|
+| `--dir` | no | project directory (default cwd) — default `.` |
+| `--json` | no | emit one JSON object on stdout |
+| `--project` | no |  |
+| `--author` | no |  |
+| `--tags` | no | comma-separated, any-match |
+| `--from` | no |  |
+| `--to` | no |  |
+| `--query` | no | substring match on summary/detailed |
+
+#### `hyperspace worklog import`
+
+import a sibling plugin's markdown entries
+
+| Argument | Required | Notes |
+|---|---|---|
+| `--dir` | no | project directory (default cwd) — default `.` |
+| `--json` | no | emit one JSON object on stdout |
+| `--from` | yes |  |
+
+#### `hyperspace worklog mirror`
+
+re-render the store-side markdown mirror
+
+| Argument | Required | Notes |
+|---|---|---|
+| `--dir` | no | project directory (default cwd) — default `.` |
+| `--json` | no | emit one JSON object on stdout |
+| `--rebuild` | no |  |

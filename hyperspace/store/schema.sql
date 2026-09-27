@@ -43,6 +43,12 @@
 -- `PRAGMA foreign_keys = ON` and `PRAGMA journal_mode = WAL` are set per-connection by
 -- `Store.__init__` (WAL persists once set; foreign_keys does not — SQLite requires it
 -- on every connection). Timestamps are UTC ISO-8601 strings, written by `Store`.
+--
+-- `worklog.source_file` (v0.1.2, nullable): the filename of the markdown row this
+-- worklog entry was imported from, when it was imported rather than written natively.
+-- An existing v0.1.1 db gains this column via `Store`'s own idempotent migration on
+-- next open — never a hand-run script. Set, it means: never re-render this row into
+-- the store-side markdown mirror (the source file already exists on disk).
 
 CREATE TABLE meta (
     key   TEXT PRIMARY KEY,
@@ -163,7 +169,8 @@ CREATE TABLE worklog (
     client        TEXT,
     surface       TEXT,
     work_item_id  TEXT REFERENCES work_items(id),
-    created_at    TEXT
+    created_at    TEXT,
+    source_file   TEXT
 );
 
 CREATE TABLE verifier_runs (
