@@ -185,6 +185,9 @@ _SKIP_VERIFIER_DISPOSITIONS = frozenset({"deferred", "archived"})
 
 #: Role labels written to `work_items.completed_by` by the graph service, one
 #: per door. They are ROLE labels, never client ids or key material.
+#: In this plugin the local verifier's commit writes `hyperspace-verifier` and
+#: the console door writes `hyperspace-console` (the source engine used its own
+#: service's names for the same two doors).
 #:
 #: Why a label is sufficient: every path that can set `state="done"`
 #: stamps the door it came through. Five doors, three labels (verified
@@ -199,8 +202,8 @@ _SKIP_VERIFIER_DISPOSITIONS = frozenset({"deferred", "archived"})
 #: accept, and it refuses BY NAME rather than falling through the
 #: unknown-label branch — the difference between "a door we know does
 #: not verify" and "a door that did not exist when this was written".
-_COMMITTER_LABEL = "graph-machine-committer"
-_CONSOLE_LABEL = "caelos-console"
+_COMMITTER_LABEL = "hyperspace-verifier"
+_CONSOLE_LABEL = "hyperspace-console"
 #: Known door, NOT evidence of verification — see above.
 _UPLOADER_LABEL = "workplan-uploader"
 

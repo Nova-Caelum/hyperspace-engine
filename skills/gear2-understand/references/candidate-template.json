@@ -1,0 +1,100 @@
+{
+  "_README": [
+    "REFERENCE TEMPLATE — the CandidateWorkItem shape an N1 tests.json uses, and the",
+    "shape the `hyperspace` MCP server's `upsert_work_item` tool accepts. Copy it,",
+    "replace every value, then strip every key beginning with an underscore: those are",
+    "annotations, and the contract forbids extra keys.",
+    "",
+    "STRIP RECURSIVELY, NOT JUST AT TOP LEVEL. `specification` carries a nested `_`",
+    "annotation. The validator strips at every depth and validates against the plugin's",
+    "vendored contract:",
+    "  .hyperspace/env/bin/python \"${CLAUDE_PLUGIN_ROOT}/bin/validate_candidate.py\" <payload.json>",
+    "",
+    "WHY A TEMPLATE AND NOT PROSE: the contract has 8 required fields, 3 of them nested",
+    "structures with their own required fields. A copyable, machine-validated example is",
+    "the cheapest defence against a payload and the contract drifting apart."
+  ],
+
+  "project": "demo",
+  "external_id": "demo:example-slug",
+  "name": "One line naming the deliverable, not the activity",
+  "type": "task",
+  "state": "ready",
+  "_type_values": "task | draft | audit | investigation | design | build | decision | phase | workstream",
+  "_state_values": "pending-review | ready | in-progress | blocked | done | deferred | archived — omit to accept the default",
+
+  "module": null,
+  "_module": "REQUIRED KEY, nullable value. Explicit null = 'belongs to no module'. OMITTING the key is rejected — omission means the question was never considered. The type enforces this, not a validator.",
+
+  "parent_work_item": null,
+  "assignee_agent": "engineer",
+  "team": ["engineer"],
+  "effort_level": "medium",
+  "_effort_level": "quick | medium | hard | max | unknown. No null — a proposer must choose. 'unknown' is the honest answer when there is no basis, not a shortcut past a guess you could make.",
+  "idempotency_key": "example-slug-2026-09-26",
+
+  "specification": {
+    "_": "The three questions a description must answer, as FIELDS so they cannot be answered by padding. Rendered into the row's description when it is filed.",
+    "problem": "What is actually wrong or missing, stated so a stranger could recognise it. Minimum 40 characters, and placeholder text is refused.",
+    "why_it_matters": "The cost of not doing this, or what it unblocks. Minimum 40 characters. This is the field that decides whether the item survives triage later.",
+    "context_pointer": "Where the context lives: a file path, a worklog entry, a pull request. Minimum 20 characters."
+  },
+
+  "source_references": [
+    { "uri": "hyperspace/runs/example-slug/original_input.md", "anchor": "the ask, verbatim" },
+    { "uri": "hyperspace/runs/example-slug/01_understand/Problem.md", "anchor": "## Constraints" }
+  ],
+  "_source_references": "At least 1, at most 100. A work item with no provenance is an assertion with no evidence.",
+
+  "acceptance_criteria": [
+    {
+      "statement": "WHOLE-PATH: running the example end to end writes out/result.txt",
+      "verification": { "kind": "file_state", "path": "out/result.txt", "assertion": "exists" }
+    },
+    {
+      "statement": "The test suite passes with the new regression test present",
+      "verification": { "kind": "command_check", "check_id": "tests", "target": "tests/test_example.py" }
+    },
+    {
+      "statement": "The user has read the walkthrough and agrees the shape is teachable",
+      "verification": { "kind": "manual", "instruction": "The user confirms the walkthrough is followable without reading the source" }
+    }
+  ],
+  "_acceptance_criteria": [
+    "1-20 criteria. AT LEAST ONE must be non-manual — all-manual criteria cannot be discharged and cannot support a completion claim.",
+    "This is NOT a ban on manual. Keep the judgment criteria and ADD an executable one beside them.",
+    "The five verification kinds and their required fields:",
+    "  command_check  -> check_id: tests|typecheck|build|lint|git_diff_nonempty ; target (optional, scopes the check — NEVER a command to run)",
+    "  file_state     -> path ; assertion: exists|not_exists|contains|hash_equals|modified_after|glob_exists ; expected (optional)",
+    "  db_readback    -> query_id: ^[a-z0-9_]+$ ; expected (object)",
+    "  http_readback  -> endpoint_id: ^[a-z0-9_]+$ ; expected_status: 100-599",
+    "  manual         -> instruction (min 10 chars)",
+    "Paths and targets are project-relative: no '..', no leading '/' or '~'."
+  ],
+
+  "proposer_identity": "engineer",
+  "proposer_surface": "cli",
+
+  "uncertainty_notes": [
+    {
+      "kind": "duplicate",
+      "detail": "A similarly-named item may already exist under a different slug",
+      "check": "list_work_items for the project and scan names for semantic near-matches before attempting"
+    }
+  ],
+  "_uncertainty_notes": [
+    "REQUIRED KEY. May be an EMPTY LIST — the explicit 'nothing I doubt' answer. It may not be ABSENT: absence is silence, and silence is a different answer.",
+    "Answers exactly one question: what would make this candidate WRONG. Not a hedge, not a confidence score.",
+    "kind: already-done | duplicate | wrong-type | wrong-scope | missing-context | unverified-claim"
+  ],
+
+  "user_stated_type": null,
+  "user_stated_action": null,
+  "_user_stated": "If the user said 'make that a module' or 'update that task', record it VERBATIM here — type in user_stated_type, add|update in user_stated_action. Re-deriving either is the violation.",
+
+  "source_verbatim": null,
+  "_source_verbatim": "The user's actual words, when this item came from something they said. Optional, max 20000 chars.",
+
+  "requested_safety_exception": null,
+  "_requested_safety_exception": "Optional. Requesting an exception does NOT move the safety class — it records that you asked."
+}

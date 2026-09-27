@@ -114,3 +114,75 @@ def test_e_port_scan_check_writes_pass(tmp_path):
     assert out.is_file(), proc.stdout + proc.stderr
     verdict = json.loads(out.read_text(encoding="utf-8"))
     assert verdict["result"] == "PASS", json.dumps(verdict["evidence"], indent=2)[:4000]
+
+
+def _candidate(**overrides):
+    payload = {
+        "_comment": "annotation keys are stripped at every depth",
+        "project": "demo",
+        "external_id": "demo:goal-acceptance",
+        "name": "Demo goal acceptance",
+        "type": "task",
+        "idempotency_key": "k1",
+        "specification": {
+            "_note": "stripped too",
+            "problem": "The demo goal has no acceptance criteria written down anywhere yet.",
+            "why_it_matters": "Without criteria the node cannot pass its gate and design cannot start.",
+            "context_pointer": "01_understand/Problem.md in the run folder",
+        },
+        "source_references": [{"uri": "original_input.md"}],
+        "effort_level": "quick",
+        "module": None,
+        "acceptance_criteria": [{
+            "statement": "WHOLE-PATH: running the demo end to end writes out/result.txt",
+            "verification": {"kind": "file_state", "path": "out/result.txt", "assertion": "exists"},
+        }],
+        "proposer_identity": "engineer",
+        "proposer_surface": "cli",
+        "uncertainty_notes": [],
+    }
+    payload.update(overrides)
+    return payload
+
+
+def test_validate_candidate_script(tmp_path):
+    script = ROOT / "bin" / "validate_candidate.py"
+    good = tmp_path / "good.json"
+    good.write_text(json.dumps(_candidate()), encoding="utf-8")
+    ok = subprocess.run([sys.executable, str(script), str(good)], capture_output=True, text=True)
+    assert ok.returncode == 0, ok.stdout + ok.stderr
+    assert "VALID" in ok.stdout
+
+    bad = tmp_path / "bad.json"
+    bad.write_text(json.dumps(_candidate(module="m", daniel_stated_type="task")), encoding="utf-8")
+    refused = subprocess.run([sys.executable, str(script), str(bad)], capture_output=True, text=True)
+    assert refused.returncode == 1
+    assert "INVALID" in refused.stdout
+    assert "daniel_stated_type" in refused.stdout  # pydantic's own message, printed
+
+    shipped = ROOT / "skills" / "gear2-understand" / "references" / "candidate-template.json"
+    template = subprocess.run([sys.executable, str(script), str(shipped)], capture_output=True, text=True)
+    assert template.returncode == 0, template.stdout + template.stderr
+
+
+def test_build_gate_accepts_the_plugins_closure_labels(tmp_path):
+    sys.path.insert(0, str(ROOT / "bin"))
+    import node_gates  # noqa: PLC0415
+
+    workplan = tmp_path / "workplan.json"
+    workplan.write_text(json.dumps({"project": "demo", "work_items": [{"external_id": "demo-a"}]}))
+    reconciliation = tmp_path / "RECONCILIATION.md"
+    reconciliation.write_text("- demo-a → done\n", encoding="utf-8")
+    verdicts = {}
+    for label in ("hyperspace-verifier", "hyperspace-console", "graph-machine-committer"):
+        snapshot = tmp_path / f"{label}.json"
+        snapshot.write_text(json.dumps([{
+            "external_id": "demo-a", "state": "done", "completed_by": label,
+            "updated_at": "2026-09-26T00:00",
+        }]))
+        verdicts[label] = node_gates.check_executing(
+            workplan=workplan, verifications_dir=tmp_path / "none",
+            reconciliation=reconciliation, graph_snapshot=snapshot,
+        ).ok
+    assert verdicts == {"hyperspace-verifier": True, "hyperspace-console": True,
+                        "graph-machine-committer": False}

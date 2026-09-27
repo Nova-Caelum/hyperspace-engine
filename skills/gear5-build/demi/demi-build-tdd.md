@@ -16,7 +16,7 @@ version: 1.0
 
 ## Overview
 
-Makes a row's change provable before it is claimed: one failing test observed for the right reason, then the smallest change that turns it green, both pasted verbatim into the report. Those two sections are the per-task verification-before-completion evidence the Build node requires before `complete_workitem` (D5).
+Makes a row's change provable before it is claimed: one failing test observed for the right reason, then the smallest change that turns it green, both pasted verbatim into the report. Those two sections are the per-task evidence — fresh, pasted, observed — the Build node requires before `complete_workitem` (D5).
 
 ## Dispatch shape
 
@@ -82,7 +82,7 @@ Turn one row's criteria into a red→green run.
 ## Source
 
 - **Origin:** T4.2 (2026-09-07); D5 per-task VBC, signed by the author 2026-09-07.
-- **Precedent failures:** `taskgraph-write` §12 observation 2026-08-27; T6.0 run `4ca9f664` `unverifiable`; INC022 Class 1.
+- **Precedent failures:** a prior run's filing record, 2026-08-27; T6.0 run `4ca9f664` `unverifiable`; INC022 Class 1.
 - **Authored by:** the engine's authors on 2026-09-07.
 - **Community lineage:** obra/superpowers `test-driven-development` 6.3.0 (MIT), archived with the framework's research notes. Ported: iron law; RED → verify → GREEN → verify → refactor; "passes immediately = testing existing behavior". Not ported: TypeScript examples, the graph, `writing-good-tests.md`, ask-your-partner exceptions.
-- **Related:** `demi-build-subagent-dispatch`, `verification-before-completion`, `taskgraph-closure`.
+- **Related:** `demi-build-subagent-dispatch`, the `hyperspace` server's `complete_workitem`.

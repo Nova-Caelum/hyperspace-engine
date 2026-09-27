@@ -16,7 +16,7 @@ Ported from `sprint-manager/references/handoff-prompt-template.md` (internal). E
   - [concrete paths: the code/tests the row touches, the decision entries that bind it]
 - **Decisions already locked — do NOT re-open:** [D-numbers]
 - **Isolation:** [shared-tree — files: … | worktree] — baseline: [explicit test command]
-- **Trigger tokens for your preloaded skills:** [literal tokens, e.g. "TDD", "verification-before-completion"] — conditional skills stay dormant without them
+- **Trigger tokens for your preloaded skills:** [literal tokens, e.g. "TDD", "evidence before closure — no completion claim without fresh, pasted verification output"] — conditional skills stay dormant without them
 - **Implementer contract:** you do not dispatch subagents; you do not close the row; you do not promote, deploy, or edit runtime paths
 
 ## Your task
