@@ -18,6 +18,7 @@ one landing-dischargeable `file_state` criterion beside the manual one.
 import asyncio
 import os
 import subprocess
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -103,6 +104,11 @@ def _file_row(store: Store, ext: str, criteria: list[dict]) -> dict:
 
 
 def _write(root: Path, rel: str, text: str = "result\n") -> None:
+    # Linux stamps mtime from the coarse kernel clock (one jiffy, up to 10 ms
+    # behind the fine clock the row's filed_at uses); a write in the same
+    # jiffy as the filing can read as "not after filing". Real sessions put
+    # seconds between filing and writing — the tests put 20 ms.
+    time.sleep(0.02)
     p = root / rel
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(text)
