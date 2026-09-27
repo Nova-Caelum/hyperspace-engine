@@ -19,16 +19,37 @@ _DEFAULT_PORT = 8791
 
 
 def _cmd_init(args: argparse.Namespace) -> int:
-    """`hyperspace init [--dir <project-dir>]` — creates `<dir>/.hyperspace/graph.db`."""
+    """`hyperspace init [--dir <project-dir>] [--provision [--judge NAME]
+    [--port N] [--user NAME]]` — creates `<dir>/.hyperspace/graph.db`, and
+    with `--provision` also provisions the isolated environment, resolves
+    the judge (probed unless `--judge` names one explicitly), writes
+    `.hyperspace/config.toml`, and writes the launcher — the setup skill's
+    non-interactive path (brief step 2f), nothing prompted."""
+    from hyperspace.config import JUDGES
+    from hyperspace.setup.provision import provision_and_report
+
     sub_parser = argparse.ArgumentParser(prog="hyperspace init", add_help=False)
     sub_parser.add_argument("--dir", default=".")
-    sub_args = sub_parser.parse_args(args.rest)
+    sub_parser.add_argument("--provision", action="store_true")
+    sub_parser.add_argument("--judge", default=None, choices=list(JUDGES))
+    sub_parser.add_argument("--port", type=int, default=None)
+    sub_parser.add_argument("--user", default=None)
+    try:
+        sub_args = sub_parser.parse_args(args.rest)
+    except SystemExit as exc:
+        return exc.code if isinstance(exc.code, int) else 2
 
-    db_path = Path(sub_args.dir).resolve() / ".hyperspace" / "graph.db"
+    project_dir = Path(sub_args.dir).resolve()
+    db_path = project_dir / ".hyperspace" / "graph.db"
     already_existed = db_path.exists()
     store = Store.init(db_path)
     store.close()
     print(f"{'already initialised' if already_existed else 'initialised'} {db_path}")
+
+    if sub_args.provision:
+        return provision_and_report(
+            project_dir, judge=sub_args.judge, port=sub_args.port, user=sub_args.user,
+        )
     return 0
 
 
@@ -104,10 +125,28 @@ def _cmd_serve(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_doctor(args: argparse.Namespace) -> int:
+    """`hyperspace doctor [--dir <project-dir>]` — re-runs the setup skill's
+    check phase (python, env, store, config/judge, door port free-or-ours)
+    and prints one OK/FAIL line per check; exits 0 only when every check
+    reads OK."""
+    from hyperspace.setup.provision import doctor as run_doctor
+
+    sub_parser = argparse.ArgumentParser(prog="hyperspace doctor", add_help=False)
+    sub_parser.add_argument("--dir", default=".")
+    sub_args = sub_parser.parse_args(args.rest)
+
+    project_dir = Path(sub_args.dir).resolve()
+    all_ok, lines = run_doctor(project_dir)
+    for line in lines:
+        print(line)
+    return 0 if all_ok else 1
+
+
 # Subcommand registry: name -> callable(args: argparse.Namespace) -> int.
-# Later rows extend this dict by adding one entry each; this row installs `serve`
-# (the store row already installed `init`).
-SUBCOMMANDS: dict = {"init": _cmd_init, "serve": _cmd_serve}
+# Later rows extend this dict by adding one entry each; this row installs
+# `doctor` (the store row already installed `init`, the door row `serve`).
+SUBCOMMANDS: dict = {"init": _cmd_init, "serve": _cmd_serve, "doctor": _cmd_doctor}
 
 _NO_SUBCOMMANDS_MESSAGE = (
     "no subcommands installed yet — the store row adds `init`, "
