@@ -577,3 +577,148 @@ def test_no_closure_log_on_non_done_transition(tmp_path):
         assert store.search_worklog(tags=["closure"]) == []
     finally:
         store.close()
+
+
+# ── (h) v0.1.2 — worklog CLI contract + store-side markdown mirror ───────────
+#
+# The `source_file` column (nullable, added by an idempotent migration off an
+# existing v0.1.1 db): `get_worklog_by_source_file` is the import verb's own
+# idempotency check; `search_worklog`'s `query` param is the CLI's substring
+# search when the store itself doesn't already have one; the closure
+# auto-log (item (g) above) goes through the same `append_worklog` choke
+# point every other insert does, so it renders a mirror file too when
+# `worklog_mirror_dir` is configured.
+
+
+def test_worklog_schema_migration_from_v1_is_idempotent(tmp_path):
+    """A v0.1.1 db (schema_version=1, no `source_file` column) opens cleanly,
+    gains the column, is marked schema_version=2, keeps its existing rows —
+    and a second `Store.open` against the now-migrated file is a no-op, not
+    a second ALTER TABLE crashing on a duplicate column."""
+    db_path = tmp_path / ".hyperspace" / "graph.db"
+    db_path.parent.mkdir(parents=True)
+
+    # A minimal, literal v0.1.1-shaped `worklog` table — no `source_file`
+    # column — independent of whatever exact whitespace schema.sql uses for
+    # the column this migration adds, so this test never drifts just because
+    # a later edit reformats schema.sql.
+    v1_schema = """
+        CREATE TABLE meta (
+            key   TEXT PRIMARY KEY,
+            value TEXT
+        );
+        CREATE TABLE worklog (
+            id            TEXT PRIMARY KEY,
+            author        TEXT,
+            project       TEXT,
+            summary       TEXT,
+            detailed      TEXT,
+            tags          TEXT,
+            client        TEXT,
+            surface       TEXT,
+            work_item_id  TEXT,
+            created_at    TEXT
+        );
+    """
+    raw = sqlite3.connect(str(db_path))
+    try:
+        raw.executescript(v1_schema)
+        raw.execute("INSERT INTO meta (key, value) VALUES ('schema_version', '1')")
+        raw.execute(
+            "INSERT INTO worklog (id, author, project, summary, created_at) VALUES (?, ?, ?, ?, ?)",
+            ("row-pre-migration", "someone", "demo-project", "Before the migration.", "2026-09-01T00:00:00+00:00"),
+        )
+        raw.commit()
+    finally:
+        raw.close()
+
+    store = Store.open(db_path)
+    try:
+        cur = store._conn.execute("SELECT value FROM meta WHERE key = 'schema_version'")
+        assert cur.fetchone()["value"] == str(SCHEMA_VERSION)
+        cols = {r["name"] for r in store._conn.execute("PRAGMA table_info(worklog)")}
+        assert "source_file" in cols
+        pre = store.get_worklog_by_source_file("does-not-exist")
+        assert pre is None
+        rows = store.recent_worklog(limit=10)
+        assert len(rows) == 1
+        assert rows[0]["id"] == "row-pre-migration"
+        assert rows[0]["source_file"] is None
+    finally:
+        store.close()
+
+    # Re-open the already-migrated file — must not raise (idempotent).
+    store2 = Store.open(db_path)
+    try:
+        cur = store2._conn.execute("SELECT value FROM meta WHERE key = 'schema_version'")
+        assert cur.fetchone()["value"] == str(SCHEMA_VERSION)
+    finally:
+        store2.close()
+
+
+def test_get_worklog_by_source_file_round_trip(tmp_path):
+    store = Store.init(tmp_path / ".hyperspace" / "graph.db")
+    try:
+        store.upsert_project(code="demo-project", name="Demo")
+        row = store.append_worklog(
+            author="engineer", summary="Imported row.", project="demo-project",
+            source_file="20260927T000000Z-imported-row.md",
+        )
+        assert row["source_file"] == "20260927T000000Z-imported-row.md"
+        found = store.get_worklog_by_source_file("20260927T000000Z-imported-row.md")
+        assert found == row
+        assert store.get_worklog_by_source_file("no-such-file.md") is None
+
+        native = store.append_worklog(author="engineer", summary="Native row.", project="demo-project")
+        assert native["source_file"] is None
+    finally:
+        store.close()
+
+
+def test_search_worklog_query_substring_matches_summary_or_detailed(tmp_path):
+    store = Store.init(tmp_path / ".hyperspace" / "graph.db")
+    try:
+        store.upsert_project(code="demo-project", name="Demo")
+        store.append_worklog(author="a", summary="Shipped the worklog CLI.", project="demo-project")
+        store.append_worklog(author="a", summary="Unrelated entry.", project="demo-project", detailed="Mentions the cli-mirror row.")
+        store.append_worklog(author="a", summary="Something else entirely.", project="demo-project")
+
+        by_summary = store.search_worklog(query="worklog cli")
+        assert len(by_summary) == 1
+        assert by_summary[0]["summary"] == "Shipped the worklog CLI."
+
+        by_detail = store.search_worklog(query="cli-mirror")
+        assert len(by_detail) == 1
+        assert by_detail[0]["summary"] == "Unrelated entry."
+
+        assert store.search_worklog(query="not present anywhere") == []
+    finally:
+        store.close()
+
+
+def test_closure_auto_log_renders_mirror_file_when_configured(tmp_path):
+    project_dir = tmp_path
+    db_path = project_dir / ".hyperspace" / "graph.db"
+    (project_dir / ".hyperspace").mkdir(parents=True)
+    (project_dir / ".hyperspace" / "config.toml").write_text(
+        'worklog_mirror_dir = "worklog/entries"\n', encoding="utf-8",
+    )
+    store = Store.init(db_path)
+    try:
+        store.upsert_project(code="demo-project", name="Demo")
+        wi = store.upsert_work_item(
+            project_code="demo-project", external_id="demo-project:wi-1",
+            name="Do the thing", type="task", state="ready",
+        )
+        store.set_work_item_state(wi["id"], "done", completed_by="hyperspace-verifier")
+
+        mirror_dir = project_dir / "worklog" / "entries"
+        files = list(mirror_dir.glob("*.md"))
+        assert len(files) == 1
+        text = files[0].read_text(encoding="utf-8")
+        assert 'author: "hyperspace-verifier"' in text
+        assert 'summary: "demo-project:wi-1 closed done (hyperspace-verifier)"' in text
+        assert 'tags: ["closure"]' in text
+        assert "row_id:" in text
+    finally:
+        store.close()

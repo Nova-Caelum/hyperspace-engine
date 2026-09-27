@@ -125,6 +125,16 @@ def _cmd_serve(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_worklog(args: argparse.Namespace) -> int:
+    """`hyperspace worklog append|recent|search|import|mirror [--json]
+    [--dir <project-dir>]` — the CLI contract a sibling plugin (unable to
+    call this plugin's MCP tools) shells out to instead; see
+    docs/reference/tripwires.md for the three config keys it honours."""
+    from hyperspace.worklog_cli import main as worklog_main
+
+    return worklog_main(args.rest)
+
+
 def _cmd_doctor(args: argparse.Namespace) -> int:
     """`hyperspace doctor [--dir <project-dir>]` — re-runs the setup skill's
     check phase (python, env, store, config/judge, door port free-or-ours)
@@ -146,11 +156,14 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
 # Subcommand registry: name -> callable(args: argparse.Namespace) -> int.
 # Later rows extend this dict by adding one entry each; this row installs
 # `doctor` (the store row already installed `init`, the door row `serve`).
-SUBCOMMANDS: dict = {"init": _cmd_init, "serve": _cmd_serve, "doctor": _cmd_doctor}
+SUBCOMMANDS: dict = {
+    "init": _cmd_init, "serve": _cmd_serve, "doctor": _cmd_doctor, "worklog": _cmd_worklog,
+}
 
 _NO_SUBCOMMANDS_MESSAGE = (
     "no subcommands installed yet — the store row adds `init`, "
-    "the door row adds `serve`, the setup row adds `doctor`"
+    "the door row adds `serve`, the setup row adds `doctor`, "
+    "the worklog-cli row adds `worklog`"
 )
 
 

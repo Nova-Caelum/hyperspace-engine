@@ -20,9 +20,20 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import Any, Iterable
 
-SCHEMA_VERSION = 1
+from .worklog_mirror import render_row
+
+SCHEMA_VERSION = 2
 
 _SCHEMA_SQL_PATH = Path(__file__).resolve().parent / "schema.sql"
+
+# One entry per version this code can migrate FORWARD from — v0.1.2 adds the
+# nullable `worklog.source_file` column (v1 -> v2). `_migrate_from` applies
+# whichever entry matches and retries safely (a `duplicate column` error is
+# swallowed, so a crash between a migration's statements and the
+# meta-version bump never breaks a re-run).
+_MIGRATIONS: dict[int, tuple[str, ...]] = {
+    1: ("ALTER TABLE worklog ADD COLUMN source_file TEXT",),
+}
 
 # Set A — task_workflow_state (work_items, modules). App.tsx L20-21.
 WORK_ITEM_STATES = frozenset(
@@ -132,12 +143,38 @@ class Store:
         cur = self._conn.execute("SELECT value FROM meta WHERE key = 'schema_version'")
         row = cur.fetchone()
         version = int(row["value"]) if row is not None else None
+        while version is not None and version < SCHEMA_VERSION and version in _MIGRATIONS:
+            self._migrate_from(version)
+            version += 1
         if version != SCHEMA_VERSION:
             self._conn.close()
             raise SchemaVersionError(
                 f"schema_version mismatch: db has {version!r}, code expects "
                 f"{SCHEMA_VERSION} — run: hyperspace migrate"
             )
+
+    def _migrate_from(self, version: int) -> None:
+        """Applies `_MIGRATIONS[version]` — the statements that take an
+        existing db from `version` to `version + 1` — then bumps
+        `meta.schema_version`. Generic over every entry in `_MIGRATIONS`, not
+        special-cased to today's single v1->v2 migration, so a future
+        migration added the same way (one more dict entry) is picked up
+        without touching this method. Idempotent even under a retry after a
+        partial prior failure (crash between a migration's own statements and
+        the meta-version bump): a `duplicate column` error — the shape an
+        `ALTER TABLE ... ADD COLUMN` raises when it already landed — is
+        swallowed; any other `OperationalError` is a real failure and still
+        raises."""
+        for statement in _MIGRATIONS[version]:
+            try:
+                self._conn.execute(statement)
+            except sqlite3.OperationalError as exc:
+                if "duplicate column" not in str(exc).lower():
+                    raise
+        self._conn.execute(
+            "UPDATE meta SET value = ? WHERE key = 'schema_version'", (str(version + 1),)
+        )
+        self._conn.commit()
 
     def close(self) -> None:
         self._conn.close()
@@ -581,21 +618,33 @@ class Store:
             "surface": fields.get("surface"),
             "work_item_id": fields.get("work_item_id"),
             "created_at": fields.get("created_at") or _now(),
+            "source_file": fields.get("source_file"),
         }
         self._conn.execute(
             """
-            INSERT INTO worklog (id, author, project, summary, detailed, tags, client, surface, work_item_id, created_at)
-            VALUES (:id, :author, :project, :summary, :detailed, :tags, :client, :surface, :work_item_id, :created_at)
+            INSERT INTO worklog (id, author, project, summary, detailed, tags, client, surface, work_item_id, created_at, source_file)
+            VALUES (:id, :author, :project, :summary, :detailed, :tags, :client, :surface, :work_item_id, :created_at, :source_file)
             """,
             row,
         )
         self._conn.commit()
         cur = self._conn.execute("SELECT * FROM worklog WHERE id = ?", (row_id,))
-        return _row_to_dict(cur.fetchone(), ["tags"])
+        result = _row_to_dict(cur.fetchone(), ["tags"])
+        # Store-side mirror (v0.1.2): derived and one-way — never raises, so
+        # a render failure can never block or revert the insert above, which
+        # has already committed by this line.
+        render_row(result, self.path)
+        return result
 
     def recent_worklog(self, limit: int = 10) -> list[dict]:
         cur = self._conn.execute("SELECT * FROM worklog ORDER BY created_at DESC LIMIT ?", (limit,))
         return [_row_to_dict(r, ["tags"]) for r in cur.fetchall()]
+
+    def get_worklog_by_source_file(self, source_file: str) -> dict | None:
+        """The import verb's own idempotency check — a re-run of `hyperspace
+        worklog import` skips any file whose name already has a row here."""
+        cur = self._conn.execute("SELECT * FROM worklog WHERE source_file = ?", (source_file,))
+        return _row_to_dict(cur.fetchone(), ["tags"])
 
     def search_worklog(
         self,
@@ -604,6 +653,7 @@ class Store:
         tags: list[str] | None = None,
         from_date: str | None = None,
         to_date: str | None = None,
+        query: str | None = None,
     ) -> list[dict]:
         clauses = []
         params: list[Any] = []
@@ -625,6 +675,13 @@ class Store:
         if tags:
             wanted = set(tags)
             rows = [r for r in rows if wanted.intersection(r.get("tags") or [])]
+        if query:
+            needle = query.lower()
+            rows = [
+                r for r in rows
+                if needle in (r.get("summary") or "").lower()
+                or needle in (r.get("detailed") or "").lower()
+            ]
         return rows
 
     # ── verifier_runs ────────────────────────────────────────────────────────

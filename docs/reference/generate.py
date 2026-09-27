@@ -242,6 +242,24 @@ def render_cli() -> str:
         rows = _arg_rows(parser)
         if rows:
             lines += ["| Argument | Required | Notes |", "|---|---|---|", *rows, ""]
+        # A subcommand whose own parser holds verbs (only `worklog`, today) —
+        # `_arg_rows` skips `_SubParsersAction` nodes on purpose (it has no
+        # per-verb argument list to render), so without this the verbs would
+        # be entirely undocumented: a bare heading and nothing else.
+        subparsers = [a for a in parser._actions if isinstance(a, argparse._SubParsersAction)]  # noqa: SLF001
+        for sub in subparsers:
+            helps = {choice.dest: choice.help for choice in sub._choices_actions}  # noqa: SLF001
+            for verb, child in sub.choices.items():
+                lines.append(f"#### `hyperspace {name} {verb}`")
+                lines.append("")
+                if helps.get(verb):
+                    lines.append(_cell(helps[verb]))
+                    lines.append("")
+                child_rows = _arg_rows(child)
+                if child_rows:
+                    lines += ["| Argument | Required | Notes |", "|---|---|---|", *child_rows, ""]
+                else:
+                    lines += ["No arguments.", ""]
     return "\n".join(lines).rstrip("\n") + "\n"
 
 
