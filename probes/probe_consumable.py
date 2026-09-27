@@ -81,7 +81,9 @@ def _check_tag(source: str | None) -> tuple[bool, dict]:
         ["git", "tag", "--points-at", "HEAD"], cwd=ROOT, capture_output=True, text=True,
     )
     tags = [t for t in points_at.stdout.splitlines() if t.strip()]
-    semver_tags = [t for t in tags if t.strip().lstrip("v")[:1].isdigit()]
+    # Claude Code resolves a versioned dependency against `{plugin}--v<semver>`
+    # tags (the `claude plugin tag` convention); a bare `v<semver>` is not read.
+    semver_tags = [t for t in tags if t.strip().startswith("hyperspace-engine--v")]
 
     if source != "github":
         return False, {
@@ -91,7 +93,7 @@ def _check_tag(source: str | None) -> tuple[bool, dict]:
         }
 
     if not semver_tags:
-        return False, {"present": False, "points_at_head": tags, "reason": "no semver tag on HEAD"}
+        return False, {"present": False, "points_at_head": tags, "reason": "no hyperspace-engine--v<semver> tag on HEAD (claude plugin tag convention)"}
 
     ls_remote = subprocess.run(
         ["git", "ls-remote", "--tags", "origin"], cwd=ROOT, capture_output=True, text=True,
@@ -114,6 +116,8 @@ def _write_consumer_plugin(consumer_dir: Path) -> None:
     (plugin_dir / "marketplace.json").write_text(json.dumps({
         "name": CONSUMER_MARKETPLACE,
         "owner": {"name": "Nova Caelum (throwaway probe fixture)"},
+        # a dependency in another marketplace is blocked unless the root marketplace allows it
+        "allowCrossMarketplaceDependenciesOn": [ENGINE_MARKETPLACE],
         "plugins": [
             {"name": "throwaway-consumer", "source": "./", "description": "throwaway consumability probe fixture"}
         ],

@@ -61,6 +61,7 @@ import subprocess
 import sys
 import tempfile
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -89,19 +90,31 @@ PROMPT = (
     "This is a probe of the whole install-to-close path, not an open-ended "
     "task: take the loop only as far as needed to prove it. Open a run for "
     "this one-line goal, then file exactly ONE work item through the "
-    "`hyperspace` MCP server's `upsert_work_item` tool, giving it a single "
+    "`hyperspace` MCP server's `upsert_work_item` tool under project code "
+    "`probe` (create that project first with the `upsert_project` tool if "
+    "it does not exist), giving it a single "
     "acceptance criterion of kind `file_state` with assertion `exists` on "
     "path `hello.txt`. Create `hello.txt` (containing the word `hello`) as "
     "the work this item describes. Then close that work item by calling the "
     "`hyperspace` MCP server's `complete_workitem` tool, naming `hello.txt` "
-    "as a touched path with effect `created`.\n\n"
+    "as a touched path with effect `created`. The tools you need are "
+    "pre-approved for this run; do not stop to ask for permission.\n\n"
     "When you are done, print exactly one final line with no other text "
     "after it, in this exact form:\n"
     "external_id=<the work item's external_id> run_id=<the filing id "
     "upsert_work_item returned>"
 )
 
-_LAST_LINE_RE = re.compile(r"external_id=(\S+)\s+run_id=(\S+)")
+_LAST_LINE_RE = re.compile(r"external_id=([A-Za-z0-9._:/-]+)\s+run_id=([A-Za-z0-9._:/-]+)")
+
+#: Headless `claude -p` denies every tool that needs approval (observed
+#: 2026-09-27: Write and every `hyperspace` MCP call blocked). Pre-approve
+#: exactly what the probe's one goal needs; the plugin's MCP tools are named
+#: `mcp__plugin_<plugin>_<server>__<tool>` (observed in the session transcript).
+ALLOWED_TOOLS = ",".join([
+    "Skill", "Read", "Write", "Edit", "Glob", "Grep", "Bash",
+    "mcp__plugin_hyperspace-engine_hyperspace__*",
+])
 
 _STRIP_ENV_EXACT = {"ANTHROPIC_API_KEY", "OPENROUTER_API_KEY"}
 _STRIP_ENV_PREFIXES = ("GMWORKER_", "GMCOMMITTER_")
@@ -312,7 +325,7 @@ def _default_session_runner(prompt: str, *, cwd: Path, env: dict, timeout: int):
     if claude is None:
         raise FileNotFoundError("`claude` not found on PATH")
     return subprocess.run(
-        [claude, "-p", prompt, "--output-format", "json"],
+        [claude, "-p", prompt, "--output-format", "json", "--allowedTools", ALLOWED_TOOLS],
         cwd=cwd, env=env, capture_output=True, text=True, timeout=timeout,
     )
 
@@ -389,7 +402,7 @@ def _step_readback(project_dir: Path, external_id: str) -> tuple[bool, dict]:
         port = _free_port()
         door = start(db_path, port=port, open_browser=False)
         base = f"http://127.0.0.1:{door.server_address[1]}"
-        with urllib.request.urlopen(f"{base}/api/work-items/{external_id}", timeout=5) as resp:
+        with urllib.request.urlopen(f"{base}/api/work-items/{urllib.parse.quote(external_id, safe=':')}", timeout=5) as resp:
             body = json.loads(resp.read())
             door_ok = resp.status == 200 and body.get("state") == "done"
             door_evidence["work_item_status"] = resp.status
