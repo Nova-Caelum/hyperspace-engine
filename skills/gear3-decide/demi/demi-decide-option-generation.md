@@ -26,7 +26,7 @@ Turns a frozen test set and a constraints list into two or three genuinely diffe
   - `<run-dir>/01_understand/tests.json` — frozen at the N1 gate; number `acceptance_criteria` `T1..TN` in file order (every entry, `manual` included) and use only those ids
   - `<run-dir>/01_understand/Problem.md` — `## Problem`, `## Constraints` (each HARD), `## Out of scope`, `## Path` (bounded | architectural — the node already chose; you do not re-triage), `## Assumptions Register`
   - `<run-dir>/loop.state.json` — must read `current_node: deciding`; its `driver` block says whether the user is present
-  - the `assumption-check` skill — called (step 4) when an option's feasibility rests on a tool or platform behaviour nobody has verified; never folded
+  - the assumptions register — a row is written (step 4) when an option's feasibility rests on a tool or platform behaviour nobody has verified; never folded
   - the workspace's frame-discipline rule, Context 2 — requirement → architecture → tool; stated requirements are HARD
   - source: an internal incident record, 2026-06-21 (INC014: an architecture that failed a stated cloud-independence requirement) — the failure the per-constraint line exists to prevent
 - **Locked decisions — do NOT re-open:** D5 (N2 exits by the mapping check; TGC not applicable); the frozen `tests.json` (a criterion you want to change is a double-back to N1, not an option); the the rulings of 2026-09-07 recorded in a prior run's build ledger: `Decision.md` section names are fixed (`## Options` · `## Decision` · `## Architecture` · `## Mapping` · `## Cuts`); tests are `T<n>` by position.
@@ -39,10 +39,10 @@ Create `<run-dir>/02_decide/Decision.md` with its first two sections.
 1. **Header.** `# Decision — <slug>` then one line: run id · node `deciding` · driver · date · `Tests: T1..TN from 01_understand/tests.json (frozen <first 8 of its sha256>)`. Then `## Options`.
 2. **Number the tests, then generate.** List `T1..TN` once at the top of `## Options` as `T<n> — <the statement's first clause>` so a reader never opens `tests.json` to follow the section. Then propose **two or three genuinely different approaches** — different shapes, not one approach with a knob. For each `### Option <letter> — <name>`: one paragraph of shape; a **per-test line** for every `T<n>` (`passes` / `passes with <named component>` / `cannot pass — <why>`); a **per-constraint line** for every `## Constraints` entry (`satisfies` / `violates` / `unknown — <what would settle it>`); trade-offs (what it costs, what it forecloses); YAGNI applied — every feature no `T<n>` needs is removed from the option before it is written down. An option with a `violates` on a HARD constraint is struck through and kept in the list with the line that killed it — it is evidence, not an option.
 3. **Recommend first.** Open `## Decision` with the recommended option and the reason in one paragraph, then why not each of the others in one line each. The reason names tests and constraints, never taste.
-4. **Verify what the choice rests on.** If the recommended option passes a `T<n>` or satisfies a constraint only by assuming a tool, platform or environment behaviour nobody has verified — CALL `assumption-check` (proactive mode) on that assumption and paste its register row under `## Decision`. A `low confidence + load-bearing` row is verified before this file is handed back, or the option is not recommended.
+4. **Verify what the choice rests on.** If the recommended option passes a `T<n>` or satisfies a constraint only by assuming a tool, platform or environment behaviour nobody has verified — write an assumptions-register row for it under `## Decision` — `| Assumption | Confidence | Load-bearing | Verified via | Actual behavior |`, verified by documentation first, then a minimal empirical test (one command, one call); reasoning is not verification. A `low confidence + load-bearing` row is verified before this file is handed back, or the option is not recommended.
 5. **Decide.** If `loop.state.json` says the user is present: one question — accept or override, with your recommendation stated — and record their answer verbatim. If absent: the recommendation IS the decision; write `Decided by: <driver>, user absent` so the choice is a ruling on the record. Hand back to the node for step 3.
 
-**Acceptance:** `## Options` lists `T1..TN`; two or three options, each with N per-test lines and one line per constraint; every struck option shows the constraint that struck it; `## Decision` opens with the choice and its reason, names tests and constraints, and says who decided; any assumption the choice rests on has a register row from the `assumption-check` call.
+**Acceptance:** `## Options` lists `T1..TN`; two or three options, each with N per-test lines and one line per constraint; every struck option shows the constraint that struck it; `## Decision` opens with the choice and its reason, names tests and constraints, and says who decided; any assumption the choice rests on has a verified register row.
 
 ### Out of scope
 
@@ -59,7 +59,7 @@ Create `<run-dir>/02_decide/Decision.md` with its first two sections.
 ### Escalate if
 
 - No option passes every `T<n>` without violating a HARD constraint → return to the user naming the test and the constraint; do NOT recommend the option that violates least.
-- `assumption-check` returns `unverified` on a load-bearing row for the recommended option → stop; name what resolves it; do NOT recommend on the assumption.
+- A load-bearing register row for the recommended option stays `unverified` → stop; name what resolves it; do NOT recommend on the assumption.
 - Two options tie and the wrong one is a rebuild → return to the user with both and your lean; do NOT pick silently when they are absent.
 - Only one option exists after honest generation → say so and why in `## Options`; do NOT pad a second option nobody would build.
 
@@ -72,7 +72,7 @@ Create `<run-dir>/02_decide/Decision.md` with its first two sections.
 
 ## Gate contribution
 
-Indirect. `check_deciding` reads `mapping.json`, not this section — nothing mechanical checks `## Options` today. What this demi contributes is the `T<n>` vocabulary (the numbering the mapping's `tests` lists use) and the option the sketch decomposes; a wrong option here produces a mapping that passes the gate and a design that fails the tests at N4. The Self-review is the check for content; for shape, `Decision.md` renders from the loop's `decision.template.md` template and `.hyperspace/env/bin/python "${CLAUDE_PLUGIN_ROOT}/bin/template_lint.py" --template <t> --document <d>` refuses a missing or out-of-order section and any unfilled `«FILL: …»` marker (landed T4.6, 2026-09-08; not wired into `check_deciding`).
+Indirect. `check_deciding` reads `mapping.json`, not this section — nothing mechanical checks `## Options` today. What this demi contributes is the `T<n>` vocabulary (the numbering the mapping's `tests` lists use) and the option the sketch decomposes; a wrong option here produces a mapping that passes the gate and a design that fails the tests at N4. The Self-review is the check for content; for shape, `Decision.md` carries `## Options`, `## Decision`, `## Architecture`, `## Mapping`, `## Cuts`, in that order, with no unfilled `«FILL: …»` marker — the Self-review's check, not `check_deciding`'s.
 
 ## Common Rationalizations
 

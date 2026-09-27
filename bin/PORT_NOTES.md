@@ -116,20 +116,80 @@ Both landed in the canonical engine on 2026-09-26; this copy predated them.
 Nine regression tests ported into `tests/test_loop_state.py`
 (`InitDoesNotClobberTests`, six; `TerminalStatusMirrorTests`, three).
 
-## Kept deliberately (would change a rule)
+## Fix pass — controller rulings (2026-09-26)
 
-- `node_gates.py` closure labels `graph-machine-committer` and
-  `caelos-console`: the Build gate accepts a `done` row by matching them. They
-  change only when the local store decides which labels it writes.
+### 9. N3 filing through the graph tools
+- **Before:** `demi-draft-taskgraph-emit` mapped the plan to `workplan.json` and ran a
+  batch uploader script (`validate` / `plan` / `apply`), which filed the rows and wrote
+  the identifiers back into the Plan.
+- **After:** the plugin does not ship an uploader. The demi still writes
+  `03_draft/workplan.json` (the gate freezes it; the Build gate reads its
+  `external_id`s), then calls the `hyperspace` MCP server once per object —
+  `upsert_module` per module, `upsert_work_item` once per `####` task block,
+  `get_work_item` to read each row back, `link_work_items` per dependency edge — and
+  the agent writes each returned row `id` into that block's `task_id` by hand.
+  `check_specifying`'s reading of `task_id` is unchanged. Authority: the plugin PRD's
+  data flow, step 3.
 
-## Referenced, not shipped
+### 10. `bin/validate_candidate.py` shipped
+- The N1 pre-gate validator: loads a `tests.json`, strips `_`-prefixed keys at every
+  depth, validates it as `hyperspace.contracts.candidate.CandidateWorkItem`. Exit 0
+  prints `VALID`; exit 1 prints `INVALID` and pydantic's message; exit 2 when the file
+  is unreadable or the contract cannot load (the code the N1 demi already names as
+  `BLOCKED`). It reuses `node_gates.py`'s contract loader and annotation strip, so the
+  validator and the gate cannot disagree. Test: `tests/test_port.py`
+  `test_validate_candidate_script`.
+- `skills/gear2-understand/references/candidate-template.json` shipped with it: the
+  N1 test-writing demi's step 2 copies it, so it is a dependency, not a pointer. It is
+  the source engine's template with neutral values and the renamed `user_stated_*`
+  fields; the same test validates it.
 
-The skills name these; the plugin does not carry them yet. Paths were rewritten
-to the plugin form (§1) without changing the step:
+### 11. Templates and the section-shape lint — per-reference decisions
+No gate reads a template: the shape lint was never wired into any node check. So each
+reference was replaced by a one-line statement of the section list, checked by the
+demi's Self-review:
+- `problem` template (`demi-understand-problem-depth`) → the seven `Problem.md`
+  sections in order, stated inline.
+- `decision` template (`demi-decide-architecture-sketch`,
+  `demi-decide-option-generation`) → the five `Decision.md` sections in order.
+- `prd` template (`demi-draft-prd-writing`) → the eight `PRD.md` sections in order.
+- `plan` template (`demi-draft-plan-writing`) → its one required section, `## Files`.
+- demi-skill template (`demi-draft-taskgraph-emit` header comment) → dropped; it only
+  documented the file's own authoring template.
+- The section-shape lint script → not shipped; no reference remains.
 
-- scripts: `bin/taskgraph_emit.py` (N3 emit), `bin/validate_candidate.py`
-  (N1 pre-gate validator), `bin/template_lint.py` (section-shape lint);
-- templates: `problem`, `decision`, `prd`, `plan` and demi-skill templates;
-- skills: `taskgraph-write`, `taskgraph-placement`, `taskgraph-closure`,
-  `assumption-check`, `overbloat-review`;
-- MCP tool: `list_initiatives` (not in the graph-tools list).
+### 12. Helper skills not shipped — behaviour inlined
+- **Contract rules** (was the task-graph write skill): required keys, placeholder
+  refusal, ≥1 non-`manual` criterion, project-relative paths, the four filing tokens,
+  no `exists` on a present path — inline in `demi-understand-test-writing`,
+  `demi-draft-plan-writing` and `demi-draft-taskgraph-emit`.
+- **Placement** (was the placement skill): module if other work items hang off it as
+  independent deliverables, work item otherwise, `parent_work_item` for a step inside
+  one — inline in the test-writing and emit demis.
+- **Closure** (was the closure skill): the gate-block lines read "row closure", and a
+  row closes only through the `hyperspace` server's `complete_workitem`.
+- **Assumptions register** (was the assumption-check skill): list, rate confidence and
+  load, verify low-confidence load-bearing rows by docs then a minimal test, record the
+  five-column table — inline in `demi-understand-problem-depth` and
+  `demi-decide-option-generation`.
+- **Overbloat review** (was the overbloat-review skill): the five advisory tags
+  (`redundant:`, `dormant-risk:`, `native:`, `yagni:`, `shrink:`), one finding per
+  line, a score line — defined in `demi-decide-ruthless-descoping` step 2; the node and
+  its other demis refer to "the overbloat review".
+- **Evidence before closure** (was the completion-verification skill): each gate block's
+  evidence line reads "evidence before closure: …"; at Build, the row's RED/GREEN run
+  in its report is the per-task evidence required before `complete_workitem`.
+- Provenance citations of those skills became neutral text ("a prior run's filing
+  record, 2026-08-27"). `derives_from` of the test-writing demi is now `none`.
+
+### 13. Closure labels
+- **Before:** the Build gate accepted `done` rows stamped by the source engine's
+  committer and console labels.
+- **After:** `_COMMITTER_LABEL = "hyperspace-verifier"`,
+  `_CONSOLE_LABEL = "hyperspace-console"` — the labels the local verifier and the
+  console door write. Test: `test_build_gate_accepts_the_plugins_closure_labels` (the
+  old committer label now refuses).
+
+### 14. Still named, not shipped
+- MCP tool `list_initiatives` (gear3 descoping) — being added to the graph tools by
+  another row; the mention stays as the `hyperspace` server's `list_initiatives` tool.

@@ -58,7 +58,7 @@ Append `## Architecture` to `Decision.md`.
 ### Escalate if
 
 - The chosen option cannot walk the `WHOLE-PATH:` criterion end to end without a component `## Out of scope` forbids → return to the node naming both; do NOT add the component quietly.
-- A component's `Depends on` names a tool or service whose behaviour nobody has verified and `## Decision` carries no register row for it → return to the node for `assumption-check`; do NOT sketch on the assumption.
+- A component's `Depends on` names a tool or service whose behaviour nobody has verified and `## Decision` carries no register row for it → return to the node for an assumptions-register row (docs, then a minimal test); do NOT sketch on the assumption.
 - The sketch only works if the option changes → return to the node; do NOT rewrite `## Decision`.
 
 ## Self-review
@@ -70,13 +70,13 @@ Append `## Architecture` to `Decision.md`.
 
 ## Gate contribution
 
-Indirect but load-bearing: the `###` names are the `name` values of `mapping.json`'s components, and `check_deciding` refuses a duplicate or nameless component and matches deferred names by exact string against `Deferred.md`. A name changed between this section and the mapping is an unmapped component at the gate. The Self-review carries what no lint can see; for the section's SHAPE, render `Decision.md` from the loop's `decision.template.md` template (it declares `## Options`, `## Decision`, `## Architecture`, `## Mapping`, `## Cuts` in order) and run `.hyperspace/env/bin/python "${CLAUDE_PLUGIN_ROOT}/bin/template_lint.py" --template <t> --document <d>` — landed T4.6, 2026-09-08, and deliberately not wired into `check_deciding`.
+Indirect but load-bearing: the `###` names are the `name` values of `mapping.json`'s components, and `check_deciding` refuses a duplicate or nameless component and matches deferred names by exact string against `Deferred.md`. A name changed between this section and the mapping is an unmapped component at the gate. The Self-review carries what no lint can see; for the file's SHAPE, `Decision.md` carries `## Options`, `## Decision`, `## Architecture`, `## Mapping`, `## Cuts`, in that order, each non-empty with no unfilled `«FILL: …»` marker — checked by the Self-review, deliberately not by `check_deciding`.
 
 ## Common Rationalizations
 
 | Rationalization | Reality |
 |---|---|
-| "One component per criterion — the tests give me the decomposition." | `overbloat-review`: *"Structure that reflects how an artifact was built rather than what it does"* — three validation helpers because the spec had three bullets. Components come from the problem's shape; `Passes` lists which tests each one serves, often several. |
+| "One component per criterion — the tests give me the decomposition." | The overbloat review's `shrink:` tag: *"Structure that reflects how an artifact was built rather than what it does"* — three validation helpers because the spec had three bullets. Components come from the problem's shape; `Passes` lists which tests each one serves, often several. |
 | "I'll leave the components vague; the plan will firm them up." | N4 dispatches a fresh implementer per row from a brief; a component that cannot be briefed from its four lines is re-designed at Build, in the most expensive context. Retrospective F1: the v2-shaped architecture arrives exactly when nobody committed to units. |
 | "Every component has its own test, so testing is covered." | SystemShape §11.9 (`gear2-understand` baseline row 1): unit tests passed while the worker sat unwired. `### Data flow` walks the `WHOLE-PATH:` criterion and `### Testing` names the component whose test fails when the path breaks. |
 

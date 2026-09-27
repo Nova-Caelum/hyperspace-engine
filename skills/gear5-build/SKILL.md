@@ -53,8 +53,8 @@ Save the snapshot first — `list_work_items` for the project, written to disk v
 Exit 0 = passed and frozen, and the engine sets `status: live` while leaving `current_node` unchanged — leave the Build node and enter `gear6-live`. 1 = refused: a workplan row is missing from `RECONCILIATION.md`, or declared `done` when the verifier did not close it. Fix the named row; never fix the artifact to match. 2 = evidence unreadable. 3 = HOLD: an undischarged `manual` criterion on a row that is not the live test. The message names each row and quotes its criterion — that list is your agenda with the user, not a wait. Write the `REVIEW.md` above for them, close the rows on their word, re-run the gate.
 Only a row that IS the live test may cross this gate open, declared `live-test` in the artifact.
 The node's registered check refuses an EMPTY `--artifact` list — a gate that freezes nothing passed nothing (D6a).
-verification-before-completion: per task, before each complete_workitem — the RED→GREEN run in `build/<row>/report.md`.
-taskgraph-closure: the gate — every filed row reads done by verifier verdict.
+evidence before closure: the row's RED/GREEN run in `build/<row>/report.md` is the per-task evidence required before each `complete_workitem`.
+row closure: the gate — every filed row reads done by verifier verdict; a row closes only through the `hyperspace` server's `complete_workitem`, never by a state write.
 
 `${CLAUDE_PLUGIN_ROOT}` is the installed plugin's root, which Claude Code substitutes into this skill's text; every command in this skill runs with `.hyperspace/env/bin/python`, the project's isolated environment. A ledger edit after exit 0 is a double-back: the ledger is frozen with the gate (D11).
 
@@ -109,7 +109,7 @@ NOT FOR:
 ## Source
 
 - **Origin:** Plan T4.2 (2026-08-27; the author: thin Build node before a polished Draft node); D5 (signed by the author 2026-09-07); D11–D13 (2026-09-07).
-- **Precedent failures:** an internal baseline record, 2026-09-07 — seven observed rows from four source types: session transcript 2026-09-07T00:50Z; D9; INC022; INC018; `taskgraph-write` 2026-08-27 + T6.0 run `4ca9f664`; INC022 Class 1; upstream re-dispatch after compaction + this run's `fresh_sessions` 2>1.
+- **Precedent failures:** an internal baseline record, 2026-09-07 — seven observed rows from four source types: session transcript 2026-09-07T00:50Z; D9; INC022; INC018; a prior run's filing record, 2026-08-27 + T6.0 run `4ca9f664`; INC022 Class 1; upstream re-dispatch after compaction + this run's `fresh_sessions` 2>1.
 - **Authored by:** the engine's authors on 2026-09-07.
 - **Community lineage:** obra/superpowers `subagent-driven-development` 6.3.0 (MIT) — controller shape, ledger, rulings, four stops, report statuses, model selection; archived with the framework's research notes. Not ported: reviewer-subagent steps, fix-loop rounds, scripts. Port / no-port table: an internal derivation-scope record, 2026-09-07.
-- **Related:** `taskgraph-closure`, `verification-before-completion`, `gear4-draft`, `bin/loop_state.py`, `bin/node_gates.py`.
+- **Related:** `gear4-draft`, `bin/loop_state.py`, `bin/node_gates.py`.
