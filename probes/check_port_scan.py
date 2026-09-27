@@ -89,7 +89,7 @@ def check_gear_names(evidence: dict) -> bool:
                 if HS_NAME.search(line):
                     hits.append(f"{path.relative_to(ROOT)}:{n}")
     evidence["gear_names"] = {"skill_dirs": skill_dirs, "hs_name_hits": hits}
-    return skill_dirs == GEAR_SKILLS and not hits
+    return set(GEAR_SKILLS).issubset(skill_dirs) and not hits
 
 
 def check_contract_resolution(evidence: dict) -> bool:

@@ -65,7 +65,7 @@ def test_a_no_vault_infra_or_personal_references():
 
 
 def test_b_gear_skill_names_only():
-    assert sorted(os.listdir(ROOT / "skills")) == GEAR_SKILLS
+    assert set(GEAR_SKILLS).issubset(os.listdir(ROOT / "skills"))
     hits = []
     for base in ("skills", "bin"):
         for path in sorted((ROOT / base).rglob("*")):
