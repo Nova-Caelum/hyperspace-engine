@@ -5,7 +5,7 @@ product makes goes to loopback only.
 
 Two sub-checks:
   (a) the one tree scanner (`probes/scan_tree.py`) over `bin skills
-      hyperspace ui probes` for the six infra terms. Two files exist SOLELY to
+      hyperspace ui probes hooks` for the six infra terms. Two files exist SOLELY to
       DEFINE the denylist this scan checks against (`probes/check_port_scan.py`,
       `tests/test_port.py`) and therefore necessarily contain every term as a
       literal string, by construction, forever — a bare quoted copy of a term,
@@ -43,7 +43,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 PROBE = "no_nova_infra"
 
-SCANNED_DIRS = ["bin", "skills", "hyperspace", "ui", "probes"]
+SCANNED_DIRS = ["bin", "skills", "hyperspace", "ui", "probes", "hooks"]
 # Built by concatenation so THIS file's own source never contains a
 # contiguous forbidden term — it would otherwise self-match under `probes/`.
 TERMS = [

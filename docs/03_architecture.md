@@ -55,10 +55,21 @@ store is ever edited by hand.
 | `.claude-plugin/plugin.json` | Plugin identity: name `hyperspace-engine`, version, licence, homepage. The version is what a dependent plugin's semver range resolves against. |
 | `.claude-plugin/marketplace.json` | Makes the repository its own marketplace. The single entry has `source: "./"` — the repository root is the plugin. |
 | `.mcp.json` | Registers one MCP server, `hyperspace`, whose command is `${CLAUDE_PLUGIN_ROOT}/bin/hyperspace-mcp`. |
+| `hooks/hooks.json` | Registers one hook, `SessionStart`, with no `matcher` — it fires on every session-start source (`startup`, `resume`, `clear`, `compact`, `fork`), running `hooks/session-start.sh`. |
 | `pyproject.toml` | The `hyperspace` Python package, its runtime dependencies, and the `hyperspace` console script. Requires Python 3.11 or newer. |
 
 Releases are tagged `hyperspace-engine--v<version>` (the `claude plugin tag` convention, which Claude
 Code's dependency resolver reads) and `v<version>`.
+
+**The session-start hook** (`hooks/`) is what keeps the loop from going silent across a session
+boundary. `hooks/session-start.sh` prints the `acing-hyperspace` primer (frontmatter stripped) on
+every `SessionStart`, one status line per active run under `hyperspace/runs/`, bumping the
+`fresh_sessions`/`compactions` budget counters on `startup`/`compact` by calling `bin/loop_state.py`'s
+own `bump`/`notify` verbs, and up to 5 recent rows from `.hyperspace/graph.db`'s `worklog` table when
+that database exists. POSIX `sh`, fail-open, no dependency beyond the Python this plugin already
+requires. What this replaces from the source engine's own session-start hook is in
+[`06_adaptation_notes.md`](06_adaptation_notes.md) §7; the couplings its literal names create are in
+[`reference/tripwires.md`](reference/tripwires.md).
 
 ---
 
