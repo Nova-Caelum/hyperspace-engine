@@ -1,0 +1,61 @@
+name: DevOps-Lead PR Review
+
+# THIN CALLER STUB — Option B source-of-truth/runtime split.
+# All review logic lives in Nova-Caelum/devops-lead
+# .github/workflows/devops-lead-pr-review.yml (source of truth). The `uses:`
+# full-SHA pin below IS the review gate for logic changes: to change review
+# behaviour, PR + review in the devops-lead repo, then bump this pin in a
+# one-line PR here. Never re-point to @main.
+#
+# PINNED 0d1b16c — the last commit that touched the reusable workflow
+# (2026-07-31, "parameterize reusable workflow for multi-tenant callers").
+# Same pin as every other Nova-Caelum caller, so all callers execute identical
+# review logic.
+#
+# Fork PRs: the `if:` below restricts this job to same-owner PRs. A PR from a
+# fork is SKIPPED, never run blind — GitHub withholds secrets from fork
+# `pull_request` events, so without the guard the job would fail red rather
+# than pass. Skipped is the correct failure mode for a public repo.
+#
+# Rollback: git revert the commit that added this file. No other file changes.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  devops-lead-review:
+    if: ${{ github.event.pull_request.head.repo.owner.login == github.repository_owner }}
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      actions: read
+      id-token: write
+    uses: Nova-Caelum/devops-lead/.github/workflows/devops-lead-pr-review.yml@0d1b16cee071fcd8896c7dc5130a2644f0360a30
+    secrets: inherit
+    with:
+      persona_source_repo: 'Nova-Caelum/devops-lead'
+      persona_source_ref: 'main'
+      persona_path: '.persona-source/.claude/agents/devops-lead.md'
+      auto_merge_paths: |
+        EVERY path in this repo is AUTO-MERGE-SAFE when the diff trips none of the escalate conditions below. Path alone never decides: classify by what the diff DOES, per the numbered escalate list. Routine traffic for this repo — merge it confidently — is: prose edits to README.md, CLAUDE.md, THIRD_PARTY_NOTICES.md and the numbered narrative docs docs/00_start_here.md through docs/09_future_states.md; prose edits to skills/*/SKILL.md, skills/*/demi/** and skills/*/references/** that do not change a gate's stated exit condition or a required artifact; added test cases under tests/** that only ADD assertions; new probes under probes/** that only ADD a check; docs/hyperspace-loop.svg; .gitignore. A file DELETION that matches the PR's stated scope (a retirement, a fold, a supersede) is normal work and merges.
+      escalate_paths: |
+        (1) SECRET MATERIAL in the diff — a key, token, password, private key or OAuth/refresh token, a dollar-brace VAR in an .mcp.json secret field, a secret reaching hook stdout, `set -x`, or `curl -v`.
+        (2) A FETCH FROM AN UNTRUSTED SOURCE inside a hook, skill, probe or module — curl/wget/fetch/urllib/requests to a URL that is not ours or a known-trusted source, an unpinned dependency added to pyproject.toml, instructions embedded in fetched content, or anything else that puts untrusted text into agent context.
+        (3) A NEW DOOR — a new MCP tool or verb in hyperspace/mcp/server.py, hyperspace/tools/registry.py, hyperspace/tools/reads.py or hyperspace/tools/work_items.py; a new route in hyperspace/http/routes.py or hyperspace/http/server.py; a new entry in .mcp.json or bin/hyperspace-mcp; or any newly externally-reachable surface. The local MCP server's tool surface is the product's blast radius — every added verb is a new capability handed to every agent that loads it.
+        (4) A GATE WEAKENED, AND THEREFORE THE PRODUCT'S REASON TO EXIST REMOVED — bin/node_gates.py, reference/test_node_gates.py, docs/reference/gate-contracts.md, hyperspace/verify/predicates.py, hyperspace/verify/landing.py, hyperspace/verify/compose.py, hyperspace/verify/claim.py, hyperspace/verify/delta.py, hyperspace/verify/graph.py, hyperspace/verify/deps.py. A diff that makes a registered check easier to pass, removes a refusal path, converts a refusal to a warning, or lets an undischarged criterion through is the diff least eligible for auto-merge in this repo. This engine's entire value is that its gates refuse; a weakened gate ships a loop that only looks like it verifies.
+        (5) THE STATE MACHINE'S ENDING PREDICATES — bin/loop_state.py, bin/loop_state.schema.json, hyperspace/store/schema.sql, hyperspace/store/store.py, hyperspace/config.py. Escalate any change to which node transitions are legal, what `status: live` or `done` requires, who may confirm, or the persisted shape those answers are read from. `confirm` refusing any authority but a human is a load-bearing refusal, not a default.
+        (6) THE CONTRACT — hyperspace/contracts/candidate.py, hyperspace/contracts/enums.py, hyperspace/contracts/results.py, bin/validate_candidate.py. A loosened field, a widened enum, a dropped required key or a relaxed length bound silently lowers the bar for every run the engine will ever gate.
+        (7) THE VERIFIER'S JUDGE SELECTION OR ITS CREDENTIAL PATH — hyperspace/judge/base.py, cli_runner.py, pydantic_ai_runner.py, none_runner.py, judgments.py, _prompts.py, and the judge prompts hyperspace/verify/prompts/criteria_judge.md and evidence_judge.md. Escalate any change to which runner is chosen, any path that could select `none_runner` where a real judge was expected, and any change to how judge credentials are resolved. A judge silently downgraded to no-op returns passes it never computed.
+        (8) THE DOCUMENTATION-DRIFT TEST AND WHAT IT GUARDS — tests/test_reference_docs.py, docs/reference/generate.py, and the generated docs/reference/*.md (cli.md, mcp-tools.md, state-fields.md, status-vocabulary.md, tripwires.md). That test exists to FAIL when the documentation lies about the code; a diff that edits a generated reference by hand, or relaxes the test so a mismatch passes, restores exactly the drift the test was built to catch.
+        (9) THE INSTALLER AND ANYTHING IT WRITES ONTO A MACHINE — hyperspace/setup/provision.py, hyperspace/setup/__main__.py, hyperspace/setup/launcher_templates/** (including the .bat, .command and .sh launchers), hooks/hooks.json, hooks/session-start.sh, and .claude-plugin/plugin.json plus .claude-plugin/marketplace.json which decide what loads and from where.
+        (10) A RELEASE PROBE OR TEST DELETED OR LOOSENED — probes/run.py, probes/_verdict.py, probes/scan_tree.py, any probes/check_*.py or probes/probe_*.py, tests/test_release_probes.py, tests/test_known_defects.py, tests/test_tripwires.py, or adding --force, a skip marker, an xfail or a relaxed mode anywhere under tests/** or probes/**. probe_no_vault_refs.py and probe_no_nova_infra.py specifically keep Nova-internal paths and infrastructure out of a public product — weakening either is a disclosure risk, not a test-hygiene question.
+        (11) ANYTHING IRREGULAR — the diff does something its own description does not account for, obfuscated/encoded/base64 payloads, an unexplained deletion, a new binary or non-text file, or a change that does not fit its stated purpose. This is the "somebody slipped something in" test.
+        (12) THE DELIVERY MACHINERY ITSELF — .github/workflows/**, pyproject.toml packaging metadata, ui/build.sh, and the checked-in bundle ui/dist/** (index-*.js, index-*.css, the wordmark asset). The ui/ source is NOT in this repo — only SOURCE.md, build.sh and dist/ — so a reviewer cannot confirm a bundle was built from the source it claims. A minified bundle is unreadable by construction, which is exactly the shape item (11) exists to catch; it is never auto-merge-safe here.
+        (13) A failing CI check or a merge conflict.
+      worklog_project: 'nova-caelum-framework'
+      repo_context_description: >-
+        the shipped v0.1.0 Hyperspace Engine Claude Code plugin — a five-station loop whose entire
+        value is that its gates, contract and verifier refuse work that has not actually landed, so a
+        diff that makes any check easier to pass removes the product's reason to exist
