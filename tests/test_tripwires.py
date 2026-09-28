@@ -69,8 +69,8 @@ class McpToolPrefixTests(unittest.TestCase):
     every hand-typed copy, then asserted present in each one."""
 
     def _expected_prefix(self) -> str:
-        plugin = json.loads((REPO_ROOT / ".claude-plugin" / "plugin.json").read_text())
-        mcp = json.loads((REPO_ROOT / ".mcp.json").read_text())
+        plugin = json.loads((REPO_ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+        mcp = json.loads((REPO_ROOT / ".mcp.json").read_text(encoding="utf-8"))
         server_name = next(iter(mcp["mcpServers"]))
         return f"mcp__plugin_{plugin['name']}_{server_name}__"
 
@@ -168,7 +168,7 @@ class SkillNameReferenceTests(unittest.TestCase):
 
     def test_every_skill_name_shaped_mention_resolves(self) -> None:
         skill_dirs = {p.name for p in (REPO_ROOT / "skills").iterdir() if p.is_dir()}
-        sources = _iter_markdown_files() + [REPO_ROOT / "hooks" / "session-start.sh"]
+        sources = _iter_markdown_files() + [REPO_ROOT / "hooks" / "session-start.sh", REPO_ROOT / "hooks" / "session_start.py"]
 
         missing: list[str] = []
         for src in sources:
@@ -201,3 +201,33 @@ class BinScriptReferenceTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ── docs/07 §8 (setup and Windows) quotes the runtime's own text ────────────
+
+_SETUP_SCOPE_START = "## 8. Setup, the environment, and Windows"
+
+
+class Docs07SetupMessageTests(unittest.TestCase):
+    """docs/reference/tripwires.md row: the setup/Windows messages quoted in
+    docs/07 §8 come from the hook, `doctor`, the launcher templates and the
+    CLI — rewording one there must fail here, not strand the doc row."""
+
+    def test_setup_section_excerpts_appear_in_their_sources(self) -> None:
+        text = DOCS_07.read_text(encoding="utf-8")
+        scoped = text[text.index(_SETUP_SCOPE_START):]
+        scoped = scoped[: scoped.index("\n---")]
+        messages = [m.group(1) for m in re.finditer(r"^\|\s*`([^`]+)`", scoped, flags=re.MULTILINE)]
+        self.assertGreaterEqual(len(messages), 6)
+        sources = [REPO_ROOT / "hooks" / "session-start.sh", REPO_ROOT / "hooks" / "session_start.py"]
+        sources += sorted((REPO_ROOT / "hyperspace").rglob("*.py"))
+        sources += sorted((REPO_ROOT / "hyperspace" / "setup" / "launcher_templates").iterdir())
+        corpus = "\n".join(p.read_text(encoding="utf-8") for p in sources if p.is_file())
+        corpus = _ADJACENT_STRING_LITERALS_RE.sub("", corpus)
+        # The Store placeholder's text is Windows' own, quoted for recognition.
+        external = {"Python was not found; run without arguments to install from the Microsoft Store"}
+        missing = [
+            m for m in messages
+            if m not in external and _longest_placeholder_free_segment(m) not in corpus
+        ]
+        self.assertEqual([], missing, "docs/07 §8 excerpts not found in their sources:\n" + "\n".join(missing))

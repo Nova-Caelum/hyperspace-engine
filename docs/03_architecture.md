@@ -21,7 +21,8 @@ isolated Python environment, one SQLite file, one config file, and the run folde
  │        │ call engine scripts                     │ call MCP tools              │
  │        ▼                                         ▼                             │
  │  bin/loop_state.py, node_gates.py …       MCP server `hyperspace` (stdio)      │
- │  (run state, gates)                       bin/hyperspace-mcp → hyperspace.mcp  │
+ │  (run state, gates)                       .hyperspace/env/bin/python           │
+ │                                           -m hyperspace.mcp                    │
  └────────┬─────────────────────────────────────────┬─────────────────────────────┘
           │ writes                                  │ reads / writes
           ▼                                         ▼
@@ -54,8 +55,8 @@ store is ever edited by hand.
 |---|---|
 | `.claude-plugin/plugin.json` | Plugin identity: name `hyperspace-engine`, version, licence, homepage. The version is what a dependent plugin's semver range resolves against. |
 | `.claude-plugin/marketplace.json` | Makes the repository its own marketplace. The single entry has `source: "./"` — the repository root is the plugin. |
-| `.mcp.json` | Registers one MCP server, `hyperspace`, whose command is `${CLAUDE_PLUGIN_ROOT}/bin/hyperspace-mcp`. |
-| `hooks/hooks.json` | Registers one hook, `SessionStart`, with no `matcher` — it fires on every session-start source (`startup`, `resume`, `clear`, `compact`, `fork`), running `hooks/session-start.sh`. |
+| `.mcp.json` | Registers one MCP server, `hyperspace`, whose command is the project's own interpreter, `${CLAUDE_PROJECT_DIR}/.hyperspace/env/bin/python`, with `-m hyperspace.mcp` — spawned directly, no shell, on every OS (the one path valid on macOS, Linux and Windows; see [`reference/tripwires.md`](reference/tripwires.md), "the `env/bin` contract"). |
+| `hooks/hooks.json` | Registers one hook, `SessionStart`, with no `matcher` — it fires on every session-start source (`startup`, `resume`, `clear`, `compact`, `fork`), running `hooks/session-start.sh` (which hands its Python-shaped work to `hooks/session_start.py`). |
 | `pyproject.toml` | The `hyperspace` Python package, its runtime dependencies, and the `hyperspace` console script. Requires Python 3.11 or newer. |
 
 Releases are tagged `hyperspace-engine--v<version>` (the `claude plugin tag` convention, which Claude
@@ -63,11 +64,14 @@ Code's dependency resolver reads) and `v<version>`.
 
 **The session-start hook** (`hooks/`) is what keeps the loop from going silent across a session
 boundary. `hooks/session-start.sh` prints the `acing-hyperspace` primer (frontmatter stripped) on
-every `SessionStart`, one status line per active run under `hyperspace/runs/`, bumping the
-`fresh_sessions`/`compactions` budget counters on `startup`/`compact` by calling `bin/loop_state.py`'s
-own `bump`/`notify` verbs, and up to 5 recent rows from `.hyperspace/graph.db`'s `worklog` table when
-that database exists. POSIX `sh`, fail-open, no dependency beyond the Python this plugin already
-requires. What this replaces from the source engine's own session-start hook is in
+every `SessionStart` and a setup-state line (never set up, or set up without an environment) — work
+that needs no Python — then finds an interpreter (the project environment in either OS layout,
+`python3`, `python`, `py -3`, each executed before it is trusted) and runs `hooks/session_start.py`:
+one status line per active run under `hyperspace/runs/`, bumping the `fresh_sessions`/`compactions`
+budget counters on `startup`/`compact` by calling `bin/loop_state.py`'s own `bump`/`notify` verbs, and
+up to 5 recent rows from `.hyperspace/graph.db`'s `worklog` table when that database exists. POSIX
+`sh` (Git Bash on Windows), fail-open, UTF-8 output, no dependency beyond the Python this plugin
+already requires. What this replaces from the source engine's own session-start hook is in
 [`06_adaptation_notes.md`](06_adaptation_notes.md) §7; the couplings its literal names create are in
 [`reference/tripwires.md`](reference/tripwires.md).
 
@@ -87,7 +91,7 @@ where a run is and whether it may move.
 | `drive_map.py` | The run folder's schema and its generated `DRIVE_MAP.md`, rewritten at every node entry and gate. |
 | `plan_lint.py` | A plan author's self-check. Not a gate. |
 | `validate_candidate.py` | Validates a `tests.json` against the acceptance contract before the Understand gate runs. Shares the gate's contract loader, so the two cannot disagree. |
-| `hyperspace-mcp` | The MCP launcher: resolves the project root (`CLAUDE_PROJECT_DIR`, else the working directory) and execs the project's `.hyperspace/env` interpreter on `hyperspace.mcp`. A POSIX shell script. |
+| `hyperspace_setup.py` | The setup skill's bootstrap: puts the plugin root on `sys.path` and runs the stdlib-only `hyperspace.setup` entry point, before `.hyperspace/env` exists. One command form for every shell. |
 | `PORT_NOTES.md` | The ledger of every adaptation made when the engine was ported into this plugin. See [`06_adaptation_notes.md`](06_adaptation_notes.md). |
 
 Skills call these scripts as `.hyperspace/env/bin/python "${CLAUDE_PLUGIN_ROOT}/bin/<script>.py"`.
@@ -209,9 +213,11 @@ a graph snapshot, the Build gate accepts these two labels and refuses any other 
 | Console (`ui/`) | Showing and editing the task graph | Anything the door does not serve |
 | Probes and tests | Evidence that the rest does what it says | Behaviour |
 
-Platform scope for v0.1: macOS is verified end to end; Linux runs the full suite in CI. The MCP
-launcher is a POSIX shell script and the environment path is `env/bin/python`, so Windows needs its
-own launcher before it is supported — see [`09_future_states.md`](09_future_states.md).
+Platform scope: macOS is verified end to end; macOS, Linux and Windows each run the full suite, the
+installer and MCP probes, and the real Claude Code binary's own MCP spawn and SessionStart hook in CI
+(`probes/probe_claude_runtime.py`). One interpreter path, `.hyperspace/env/bin/python`, serves every
+OS: on Windows provisioning makes `env/bin` a junction to the venv's `Scripts\`. Windows needs Git for
+Windows, because Claude Code runs plugin hooks through Git Bash there.
 
 ---
 

@@ -28,7 +28,7 @@ def run(out_dir, opts) -> bool:
 
     proc = subprocess.run(
         [str(python), str(ROOT / "probes" / "check_installer.py"), "--out", str(dest)],
-        cwd=ROOT, capture_output=True, text=True,
+        cwd=ROOT, capture_output=True, encoding="utf-8", errors="replace",
     )
 
     if dest.is_file():

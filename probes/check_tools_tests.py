@@ -44,7 +44,7 @@ def check_pytest(evidence: dict) -> bool:
     python = venv_python if venv_python.exists() else Path(sys.executable)
     proc = subprocess.run(
         [str(python), "-m", "pytest", "tests/test_tools.py", "-q"],
-        cwd=ROOT, capture_output=True, text=True,
+        cwd=ROOT, capture_output=True, encoding="utf-8", errors="replace",
     )
     summary_line = ""
     for line in proc.stdout.splitlines()[::-1]:

@@ -195,7 +195,7 @@ of v0.1 with a known next step.
 | Seam | What it means today | Next step |
 |---|---|---|
 | Build gate evidence | The local verifier records its runs in the store's `verifier_runs` table, not as files under `misc/verifications/`. Run the Build gate with `--graph-snapshot` (a saved `list_work_items` result): verifier- and console-closed rows then pass by their `completed_by`. A row that is not `done` in the graph refuses by name; the HOLD enumeration of manual criteria reads verifier run files, so it does not fire from the store yet. | Export verifier runs to the run folder, or teach the gate to read `verifier_runs` |
-| Windows | The MCP launcher is a POSIX shell script and the environment path is `env/bin/python`. | A Windows launcher and interpreter path |
+| Windows | Supported since v0.1.3: `.mcp.json` runs `.hyperspace/env/bin/python` directly (on Windows `env/bin` is a junction to `env/Scripts`), and the SessionStart hook runs under Git Bash. Verified in CI with the real `claude` binary; the interactive path is proven on a real Windows 11 PC by the user. | Anything the first real Windows 11 run surfaces |
 | Headless sessions | `claude -p` denies any tool that needs approval; the whole-path probe pre-approves exactly the tools its goal needs. Interactive sessions ask you as usual. | — |
 | Judge coverage in CI | CI exercises the `none` judge; the keyed and CLI judges are exercised when you run `probes/run.py judge_modes` with your own keys. | — |
 

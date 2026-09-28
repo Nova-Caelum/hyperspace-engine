@@ -81,7 +81,7 @@ async def _run_none_branch(project_dir: Path, evidence: dict) -> bool:
             evidence["none_error"] = filed["error"]
             return False
         (project_dir / "out").mkdir(parents=True, exist_ok=True)
-        (project_dir / "out" / "det.txt").write_text("result\n")
+        (project_dir / "out" / "det.txt").write_text("result\n", encoding="utf-8")
 
         deps = local_deps(store, NoneJudge(), project_root=project_dir)
         claim1 = CompletionClaim(
@@ -117,8 +117,8 @@ async def _run_none_branch(project_dir: Path, evidence: dict) -> bool:
         if "error" in filed2:
             evidence["none_error_manual"] = filed2["error"]
             return False
-        (project_dir / "out" / "man.txt").write_text("result\n")
-        (project_dir / "out" / "det2.txt").write_text("result\n")
+        (project_dir / "out" / "man.txt").write_text("result\n", encoding="utf-8")
+        (project_dir / "out" / "det2.txt").write_text("result\n", encoding="utf-8")
 
         claim2 = CompletionClaim(
             project=PROJECT, external_id=ext2,
@@ -167,7 +167,7 @@ async def _run_keyed_branch(judge_name: str, project_dir: Path) -> dict:
         if "error" in filed:
             return {"ran": True, "ok": False, "reason": filed["error"]}
         (project_dir / "out").mkdir(parents=True, exist_ok=True)
-        (project_dir / "out" / "result.txt").write_text("result\n")
+        (project_dir / "out" / "result.txt").write_text("result\n", encoding="utf-8")
 
         try:
             judge = get_judge(Config(judge=judge_name))

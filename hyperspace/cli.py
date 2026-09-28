@@ -12,6 +12,7 @@ import webbrowser
 from pathlib import Path
 
 from hyperspace import __version__
+from hyperspace._stdio import utf8_stdio
 from hyperspace.store import Store
 from hyperspace.http.server import create_door
 
@@ -168,6 +169,7 @@ _NO_SUBCOMMANDS_MESSAGE = (
 
 
 def main(argv=None) -> int:
+    utf8_stdio()
     argv = sys.argv[1:] if argv is None else list(argv)
 
     parser = argparse.ArgumentParser(prog="hyperspace", add_help=False)

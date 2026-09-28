@@ -20,6 +20,7 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _proc import stop_tree  # noqa: E402
 from _verdict import write_verdict  # noqa: E402
 import check_http_contract as chc  # noqa: E402
 
@@ -75,13 +76,13 @@ def run(out_dir, opts) -> bool:
     field_findings: dict[str, list[str]] = {}
     db_check: dict = {}
 
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         project_dir = Path(tmp)
         db_path = project_dir / ".hyperspace" / "graph.db"
 
         init_proc = subprocess.run(
             [str(chc._hyperspace_bin()), "init", "--dir", str(project_dir)],
-            capture_output=True, text=True,
+            capture_output=True, encoding="utf-8", errors="replace",
         )
         route_table["hyperspace init"] = f"exit={init_proc.returncode}"
         if init_proc.returncode != 0:
@@ -94,12 +95,15 @@ def run(out_dir, opts) -> bool:
         port = chc._free_port()
         serve_proc = subprocess.Popen(
             [str(chc._hyperspace_bin()), "serve", "--port", str(port), "--dir", str(project_dir)],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8", errors="replace",
         )
         try:
-            if not chc._wait_for_port("127.0.0.1", port, timeout=10.0):
+            # 60 s, as the installer probe allows: a fresh CI runner's first
+            # `hyperspace serve` imports every dependency cold.
+            if not chc._wait_for_port("127.0.0.1", port, timeout=60.0):
                 all_ok = False
                 evidence["error"] = "server never came up"
+                evidence["serve_exit_code"] = serve_proc.poll()
             else:
                 base_url = f"http://127.0.0.1:{port}"
                 code = "http-check"
@@ -184,12 +188,10 @@ def run(out_dir, opts) -> bool:
                 if status != 200 or is_error:
                     all_ok = False
         finally:
-            serve_proc.terminate()
-            try:
-                serve_proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                serve_proc.kill()
-                serve_proc.wait(timeout=5)
+            stop_tree(serve_proc)
+            out, err = serve_proc.communicate(timeout=10)
+            if evidence.get("error") == "server never came up":
+                evidence["serve_output"] = {"stdout": (out or "")[-2000:], "stderr": (err or "")[-2000:]}
 
         db_check = _single_db_file(db_path.parent)
         if not db_check.get("single_db_file"):

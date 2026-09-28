@@ -58,9 +58,22 @@ def _static_dir() -> Path:
 
 class Door(ThreadingHTTPServer):
     """The loopback door. Refuses to construct on any host but
-    `127.0.0.1`/`localhost` — Decision.md: "never bind beyond 127.0.0.1"."""
+    `127.0.0.1`/`localhost` — Decision.md: "never bind beyond 127.0.0.1".
+
+    Exclusive bind on every OS: a second door on a busy port must fail with
+    EADDRINUSE so the MCP server adopts the running one and `hyperspace
+    serve` refuses. POSIX gets that with SO_REUSEADDR (which only permits
+    reuse of a TIME_WAIT port); on Windows SO_REUSEADDR lets a second socket
+    bind a port that is already listening, so there the door sets
+    SO_EXCLUSIVEADDRUSE instead."""
 
     daemon_threads = True
+    allow_reuse_address = sys.platform != "win32"
+
+    def server_bind(self) -> None:
+        if sys.platform == "win32":
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
 
     def __init__(self, server_address: tuple[str, int], handler_class: type, *, store_path: Path):
         host, _port = server_address

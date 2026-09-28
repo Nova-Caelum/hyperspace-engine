@@ -49,4 +49,6 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    for _stream in (sys.stdout, sys.stderr):  # UTF-8 even on a Windows ANSI-code-page pipe (hyperspace/_stdio.py)
+        _stream.reconfigure(encoding="utf-8", errors="replace")
     raise SystemExit(main())

@@ -49,7 +49,7 @@ row closure: not applicable — this node creates rows; it closes none (a row cl
 
 What `check_specifying` computes (`bin/node_gates.py`), from the Plan alone: every level-4 `#### T<n>.<m>` task block — found by `plan_lint`'s parser, the same one the lint uses — carries a `task_id` field whose value is non-blank and begins with a UUID; a Plan with no task blocks is refused; every refusal of a run is listed at once. `--node specifying` without `--plan` is exit 2. A successful tool call is the precondition, not the proof: the source engine's uploader once printed PASS with nothing backfilled, which is why the gate reads the document. The order is draft → file → backfill → gate → freeze; a backfill after exit 0 modifies a frozen artifact and the state layer counts it as a double-back.
 
-`${CLAUDE_PLUGIN_ROOT}` is the installed plugin's root, which Claude Code substitutes into this skill's text; every command in this skill runs with `.hyperspace/env/bin/python`, the project's isolated environment. An edit to any of the three files after exit 0 is a double-back: the state layer detects it by hash.
+`${CLAUDE_PLUGIN_ROOT}` is the installed plugin's root, which Claude Code substitutes into this skill's text; every command in this skill runs with `.hyperspace/env/bin/python`, the project's isolated environment — the same spelling on macOS, Linux and Windows, run from the project root. An edit to any of the three files after exit 0 is a double-back: the state layer detects it by hash.
 
 ## The stops
 

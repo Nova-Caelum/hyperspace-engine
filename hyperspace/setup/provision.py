@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import Any, Callable, Mapping
 
 from ..config import write_config
+from ..venv_paths import WINDOWS, link_bin_to_scripts, native_python, portable_python
 
 MIN_PYTHON = (3, 11)
 
@@ -90,25 +91,37 @@ def provision_env(
     prefer_uv: bool = True,
     run: Callable[..., Any] = subprocess.run,
     which: Callable[[str], str | None] = shutil.which,
+    platform: str | None = None,
+    link: Callable[[Path, str], tuple[bool, str]] = link_bin_to_scripts,
 ) -> dict:
     """Creates `<project_dir>/.hyperspace/env` and installs this plugin's own
     tree into it — `uv venv` + `uv pip install` when `uv` is on PATH (and
     `prefer_uv` is true), stdlib `venv` + `pip install` otherwise. Records
     which tool ran and every subprocess's exit code so a caller (or a test)
     can tell exactly what happened without re-deriving it from side effects.
+
+    `uv venv` is pinned to `sys.executable` — the interpreter `check_python`
+    just vetted — rather than whatever `uv` would discover first. On Windows
+    (`platform == "win32"`) the install targets `env/Scripts/python.exe`, and
+    a final step links `env/bin` to `env/Scripts` so the one spelling
+    `.mcp.json` and every skill use, `.hyperspace/env/bin/python`, resolves
+    there too (`hyperspace/venv_paths.py`).
     """
+    platform = sys.platform if platform is None else platform
     project_dir = Path(project_dir)
     env_dir = project_dir / ".hyperspace" / "env"
     plugin_root = _plugin_root()
-    python_path = env_dir / "bin" / "python"
+    python_path = native_python(env_dir, platform)
 
     use_uv = prefer_uv and which("uv") is not None
     tool = "uv" if use_uv else "venv"
     steps: list[dict] = []
 
     if use_uv:
-        create_proc = run(["uv", "venv", str(env_dir)], capture_output=True, text=True)
-        steps.append({"command": f"uv venv {env_dir}", "exit_code": _rc(create_proc)})
+        create_proc = run(
+            ["uv", "venv", str(env_dir), "--python", sys.executable], capture_output=True, text=True,
+        )
+        steps.append({"command": f"uv venv {env_dir} --python {sys.executable}", "exit_code": _rc(create_proc)})
         if _rc(create_proc) == 0:
             install_proc = run(
                 ["uv", "pip", "install", "--python", str(python_path), str(plugin_root)],
@@ -130,6 +143,10 @@ def provision_env(
                 "command": f"{python_path} -m pip install {plugin_root}",
                 "exit_code": _rc(install_proc),
             })
+
+    if platform == WINDOWS and steps and all(step["exit_code"] == 0 for step in steps):
+        linked, message = link(env_dir, platform)
+        steps.append({"command": "link env/bin -> env/Scripts", "exit_code": 0 if linked else 1, "message": message})
 
     ok = bool(steps) and all(step["exit_code"] == 0 for step in steps)
     return {"tool": tool, "ok": ok, "steps": steps, "env_dir": str(env_dir)}
@@ -156,17 +173,20 @@ def probe_judges(
         "anthropic_key": bool(env.get("ANTHROPIC_API_KEY")),
     }
 
+    # Every probe runs the path `which` resolved, never the bare name: on
+    # Windows an npm-installed CLI is a `.cmd` shim that `which` finds via
+    # PATHEXT but CreateProcess cannot find by bare name.
     claude_path = which("claude")
     claude_info: dict[str, Any] = {"present": claude_path is not None, "version_ok": False, "ping_ok": False}
     if claude_path is not None:
         try:
-            version_proc = run(["claude", "--version"], capture_output=True, text=True, timeout=_PROBE_TIMEOUT_SECONDS)
+            version_proc = run([claude_path, "--version"], capture_output=True, text=True, timeout=_PROBE_TIMEOUT_SECONDS)
             claude_info["version_ok"] = _rc(version_proc) == 0
         except (subprocess.TimeoutExpired, OSError):
             claude_info["version_ok"] = False
         try:
             ping_proc = run(
-                ["claude", "-p", "ping", "--output-format", "json"],
+                [claude_path, "-p", "ping", "--output-format", "json"],
                 capture_output=True, text=True, timeout=_PROBE_TIMEOUT_SECONDS,
             )
             claude_info["ping_ok"] = _rc(ping_proc) == 0
@@ -178,7 +198,7 @@ def probe_judges(
     codex_info: dict[str, Any] = {"present": codex_path is not None, "version_ok": False}
     if codex_path is not None:
         try:
-            version_proc = run(["codex", "--version"], capture_output=True, text=True, timeout=_PROBE_TIMEOUT_SECONDS)
+            version_proc = run([codex_path, "--version"], capture_output=True, text=True, timeout=_PROBE_TIMEOUT_SECONDS)
             codex_info["version_ok"] = _rc(version_proc) == 0
         except (subprocess.TimeoutExpired, OSError):
             codex_info["version_ok"] = False
@@ -280,7 +300,7 @@ def provision(
         result.update({"env": None, "judge": None, "config_path": None, "launcher_path": None})
         return result
 
-    env_result = provision_env(project_dir, prefer_uv=prefer_uv, run=run, which=which)
+    env_result = provision_env(project_dir, prefer_uv=prefer_uv, run=run, which=which, platform=platform)
     result["env"] = env_result
 
     if judge is not None:
@@ -357,14 +377,34 @@ def _door_responds(port: int, host: str = "127.0.0.1") -> bool:
         return False
 
 
-def doctor(project_dir: str | Path) -> tuple[bool, list[str]]:
+def _check_env(env_dir: Path, platform: str) -> tuple[bool, str]:
+    """The venv's own interpreter exists — and, on Windows, `env/bin` reaches
+    it, because `.mcp.json` and every skill run `.hyperspace/env/bin/python`
+    (a missing junction leaves the MCP server unable to start)."""
+    native = native_python(env_dir, platform)
+    if not native.is_file():
+        return False, f"missing {native}"
+    if platform != WINDOWS:
+        return True, f"found {native}"
+    portable = portable_python(env_dir)
+    if not portable.with_name("python.exe").is_file():
+        return False, (
+            f"found {native}, but {portable} does not reach it — the env/bin junction is missing; "
+            "re-run the hyperspace-setup skill"
+        )
+    return True, f"found {native} (reachable as {portable})"
+
+
+def doctor(project_dir: str | Path, platform: str | None = None) -> tuple[bool, list[str]]:
     """Re-runs the setup skill's check phase: python, env, store, config/judge,
     door port free-or-ours. Returns `(all_ok, lines)` — one `OK`/`FAIL` line
     per check, in that order; the CLI prints the lines and exits 0 only when
-    every one reads `OK`."""
+    every one reads `OK`. `platform` (a `sys.platform` string) selects which
+    venv layout to expect; it defaults to the running one."""
     from ..config import load_config
     from ..http.server import is_bound  # lazy: doctor always runs post-provisioning
 
+    platform = sys.platform if platform is None else platform
     project_dir = Path(project_dir)
     hyperspace_dir = project_dir / ".hyperspace"
     lines: list[str] = []
@@ -374,9 +414,8 @@ def doctor(project_dir: str | Path) -> tuple[bool, list[str]]:
     lines.append(f"{'OK' if python_ok else 'FAIL'} python: {python_message}")
     checks.append(python_ok)
 
-    env_python = hyperspace_dir / "env" / "bin" / "python"
-    env_ok = env_python.is_file()
-    lines.append(f"{'OK' if env_ok else 'FAIL'} env: {'found' if env_ok else 'missing'} {env_python}")
+    env_ok, env_message = _check_env(hyperspace_dir / "env", platform)
+    lines.append(f"{'OK' if env_ok else 'FAIL'} env: {env_message}")
     checks.append(env_ok)
 
     db_path = hyperspace_dir / "graph.db"

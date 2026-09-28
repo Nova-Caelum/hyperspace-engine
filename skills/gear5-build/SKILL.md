@@ -56,7 +56,7 @@ The node's registered check refuses an EMPTY `--artifact` list — a gate that f
 evidence before closure: the row's RED/GREEN run in `build/<row>/report.md` is the per-task evidence required before each `complete_workitem`.
 row closure: the gate — every filed row reads done by verifier verdict; a row closes only through the `hyperspace` server's `complete_workitem`, never by a state write.
 
-`${CLAUDE_PLUGIN_ROOT}` is the installed plugin's root, which Claude Code substitutes into this skill's text; every command in this skill runs with `.hyperspace/env/bin/python`, the project's isolated environment. A ledger edit after exit 0 is a double-back: the ledger is frozen with the gate (D11).
+`${CLAUDE_PLUGIN_ROOT}` is the installed plugin's root, which Claude Code substitutes into this skill's text; every command in this skill runs with `.hyperspace/env/bin/python`, the project's isolated environment — the same spelling on macOS, Linux and Windows, run from the project root. A ledger edit after exit 0 is a double-back: the ledger is frozen with the gate (D11).
 
 ## The four stops
 

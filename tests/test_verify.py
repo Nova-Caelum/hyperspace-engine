@@ -39,7 +39,7 @@ def _git(root: Path, *args: str, date: str | None = None) -> None:
     env = {**os.environ, "GIT_AUTHOR_DATE": date, "GIT_COMMITTER_DATE": date} if date else None
     subprocess.run(
         ["git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", *args],
-        cwd=root, check=True, capture_output=True, text=True, env=env,
+        cwd=root, check=True, capture_output=True, encoding="utf-8", errors="replace", env=env,
     )
 
 
@@ -52,8 +52,8 @@ def project(tmp_path):
     """A user project: a git checkout with one commit, holding `.hyperspace/`."""
     root = tmp_path / "proj"
     root.mkdir()
-    (root / ".gitignore").write_text(".hyperspace/\nignored/\n")
-    (root / "README.md").write_text("demo\n")
+    (root / ".gitignore").write_text(".hyperspace/\nignored/\n", encoding="utf-8")
+    (root / "README.md").write_text("demo\n", encoding="utf-8")
     _git(root, "init", "-q")
     _git(root, "add", ".")
     _git(root, "commit", "-q", "-m", "init", date=_ago(120))
@@ -111,7 +111,7 @@ def _write(root: Path, rel: str, text: str = "result\n") -> None:
     time.sleep(0.02)
     p = root / rel
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(text)
+    p.write_text(text, encoding="utf-8")
 
 
 def _claim(ext: str, touched=("out/result.txt",), attestations=()):
@@ -170,7 +170,7 @@ def test_local_deps_defaults_project_root_from_store(project):
 
 def test_user_identity_read_from_config(project):
     root, store = project
-    (root / ".hyperspace" / "config.toml").write_text('user = "alice"\n')
+    (root / ".hyperspace" / "config.toml").write_text('user = "alice"\n', encoding="utf-8")
     assert _none_deps(store, root).user_identity == "alice"
 
 
@@ -446,3 +446,51 @@ def test_evidence_judge_error_retries_once_then_uncertain(project):
     assert judge.evidence_calls == 2
     assert out["steps"]["evidence"]["status"] == "uncertain"
     assert store.get_work_item(external_id="demo-project:j3", project_code=PROJECT)["state"] == "ready"
+
+
+# ── v0.1.3: command_check picks the owning repo's venv in either OS layout ──
+
+
+def test_command_check_interpreter_found_in_a_windows_layout_venv(tmp_path):
+    """D-E10 walks from the target up to `cwd` for a co-located `.venv`; a
+    Windows venv keeps its interpreter at `.venv/Scripts/python.exe`, and
+    missing it would silently run the repo's tests under the verifier's own
+    interpreter (which lacks the repo's dependencies)."""
+    from hyperspace.verify.landing import _resolve_interpreter
+
+    exe = tmp_path / ".venv" / "Scripts" / "python.exe"
+    exe.parent.mkdir(parents=True)
+    exe.write_text("", encoding="utf-8")
+    assert _resolve_interpreter(tmp_path, None) == str(exe)
+
+
+def test_command_check_interpreter_still_prefers_posix_python3(tmp_path):
+    from hyperspace.verify.landing import _resolve_interpreter
+
+    py3 = tmp_path / ".venv" / "bin" / "python3"
+    py3.parent.mkdir(parents=True)
+    py3.write_text("", encoding="utf-8")
+    (tmp_path / ".venv" / "bin" / "python").write_text("", encoding="utf-8")
+    assert _resolve_interpreter(tmp_path, None) == str(py3)
+
+
+# ── v0.1.3: git output is UTF-8 and pathspecs use forward slashes on every OS ─
+
+
+def test_delta_of_a_nested_tracked_file_shows_its_non_ascii_change(project):
+    """A tracked file one directory down (Windows `relative_to` gives a
+    backslash, which git's `<rev>:<path>` syntax rejects), changed after the
+    filing with non-ASCII content (a bare `text=True` decodes git's UTF-8
+    diff with the Windows ANSI code page)."""
+    from hyperspace.verify.delta import path_delta
+
+    root, _store = project
+    _write(root, "docs/notes.md", "before\n")
+    _git(root, "add", ".")
+    _git(root, "commit", "-q", "-m", "notes", date=_ago(60))
+    filed_at = datetime.now(timezone.utc) - timedelta(seconds=30)
+    _write(root, "docs/notes.md", "after — arrow → check ✔\n")
+    delta = path_delta(root / "docs" / "notes.md", filed_at)
+    assert delta.existed_at_filing is True, delta
+    assert delta.changed_since_filing is True, delta
+    assert "after — arrow → check ✔" in delta.diff, delta.diff

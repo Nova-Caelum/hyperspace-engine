@@ -1,26 +1,31 @@
-"""Tests for the plugin's SessionStart hook (hyperspace-engine v0.1.1 part A).
+"""Tests for the plugin's SessionStart hook (hyperspace-engine v0.1.1 part A;
+cross-platform since v0.1.3).
 
-The hook (`hooks/session-start.sh`, wired by `hooks/hooks.json`) primes the
-`acing-hyperspace` skill on every session start — cold, resumed, cleared or
-compacted — prints one status line per active loop run (bumping the
-`fresh_sessions`/`compactions` budget counters on `startup`/`compact`), and
-surfaces up to 5 recent local-worklog rows when the project's task graph
-exists. Without this hook a compaction or `/clear` silently drops the loop,
-because nothing re-primes `acing-hyperspace` (v0.1.1 brief, hook-and-tripwires).
+The hook (`hooks/session-start.sh` + `hooks/session_start.py`, wired by
+`hooks/hooks.json`) primes the `acing-hyperspace` skill on every session
+start — cold, resumed, cleared or compacted — prints the project's setup
+state, one status line per active loop run (bumping the `fresh_sessions` /
+`compactions` budget counters on `startup` / `compact`), and up to 5 recent
+local-worklog rows when the project's task graph exists. Without this hook a
+compaction or `/clear` silently drops the loop, because nothing re-primes
+`acing-hyperspace` (v0.1.1 brief, hook-and-tripwires).
 
-Every subprocess environment below is built explicitly (HOME/PATH/
-CLAUDE_PROJECT_DIR/CLAUDE_PLUGIN_ROOT) — never inherited — so a real
+Every run here executes the hooks.json command string exactly as Claude Code
+does: `${CLAUDE_PLUGIN_ROOT}` substituted with forward slashes, handed to
+`sh -c` on macOS/Linux and to Git Bash on Windows (WINDOWS_FACTS F3, F7).
+Every subprocess environment is built explicitly — never inherited — so a real
 `.hyperspace/` elsewhere on the machine, or this repo's own dev `.venv`, can
-never leak into what the hook sees.
+never leak into what the hook sees. Output is decoded as strict UTF-8: a hook
+that wrote the Windows ANSI code page would fail every test here.
 """
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import re
 import shutil
 import sqlite3
-import stat
 import subprocess
 import sys
 import tempfile
@@ -34,7 +39,10 @@ if str(BIN_DIR) not in sys.path:
 
 import loop_state  # noqa: E402
 
+from hyperspace.venv_paths import link_bin_to_scripts, native_python  # noqa: E402
+
 HOOK_PATH = REPO_ROOT / "hooks" / "session-start.sh"
+HOOK_PY_PATH = REPO_ROOT / "hooks" / "session_start.py"
 HOOKS_JSON_PATH = REPO_ROOT / "hooks" / "hooks.json"
 PRIMER_SRC = REPO_ROOT / "skills" / "acing-hyperspace" / "SKILL.md"
 SCHEMA_SQL = (REPO_ROOT / "hyperspace" / "store" / "schema.sql").read_text(encoding="utf-8")
@@ -42,12 +50,7 @@ SCHEMA_SQL = (REPO_ROOT / "hyperspace" / "store" / "schema.sql").read_text(encod
 MARKER_BEGIN = "<!-- acing-hyperspace:begin -->"
 MARKER_END = "<!-- acing-hyperspace:end -->"
 
-# Resolved once, from THIS process's own PATH — used to invoke the hook
-# itself. The subprocess's own PATH (built per-test below) is what the hook
-# script's internal `command -v python3` sees; it is deliberately narrower
-# than this process's PATH so the "no python3 anywhere" branch can be
-# exercised without also losing the ability to launch `sh` at all.
-SH_PATH = shutil.which("sh") or "/bin/sh"
+IS_WINDOWS = sys.platform == "win32"
 
 #: Claude Code's own hook-output cap, verified via `ctx7` against the current
 #: hooks reference (2026-09-27): "Hook output strings, including
@@ -61,6 +64,117 @@ HOOK_OUTPUT_CHAR_CAP = 10_000
 SESSION_EVENTS = ("startup", "resume", "clear", "compact")
 
 _FRONTMATTER_RE = re.compile(r"\A---\n.*?\n---\n\n?", re.S)
+
+
+# ── the shell Claude Code runs a shell-form hook in ─────────────────────────
+
+
+def _git_bash() -> Path | None:
+    """Git Bash the way Claude Code finds it on Windows:
+    `CLAUDE_CODE_GIT_BASH_PATH`, else `<Git>/bin/bash.exe` derived from
+    `git.exe` on PATH (never `System32\\bash.exe`, which is WSL)."""
+    override = os.environ.get("CLAUDE_CODE_GIT_BASH_PATH")
+    if override and Path(override).is_file():
+        return Path(override)
+    git = shutil.which("git")
+    if git is None:
+        return None
+    for ancestor in Path(git).resolve().parents:
+        candidate = ancestor / "bin" / "bash.exe"
+        if candidate.is_file() and (ancestor / "usr" / "bin").is_dir():
+            return candidate
+    return None
+
+
+def _hook_shell() -> list[str]:
+    if IS_WINDOWS:
+        bash = _git_bash()
+        if bash is None:
+            raise unittest.SkipTest(
+                "Git for Windows not found — Claude Code runs shell-form plugin hooks through "
+                "Git Bash on Windows, so the hook cannot run without it (WINDOWS_FACTS F7)"
+            )
+        return [str(bash), "-c"]
+    return [shutil.which("sh") or "/bin/sh", "-c"]
+
+
+def _hook_command(plugin_root: Path) -> str:
+    """The hooks.json command with `${CLAUDE_PLUGIN_ROOT}` substituted — forward
+    slashes on every OS, as Claude Code substitutes it (WINDOWS_FACTS F3)."""
+    data = json.loads(HOOKS_JSON_PATH.read_text(encoding="utf-8"))
+    command = data["hooks"]["SessionStart"][0]["hooks"][0]["command"]
+    return command.replace("${CLAUDE_PLUGIN_ROOT}", plugin_root.as_posix())
+
+
+# ── fixture builders (portable) ───────────────────────────────────────────
+
+
+def _write_shim(path: Path, body: str) -> Path:
+    """An executable `#!/bin/sh` script — runnable by POSIX sh and by Git
+    Bash alike (MSYS executes a shebang file regardless of extension)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("#!/bin/sh\n" + body, encoding="utf-8", newline="\n")
+    path.chmod(0o755)
+    return path
+
+
+def _python_shim(path: Path, marker: Path | None = None) -> Path:
+    """A shim that runs THIS test process's interpreter — and, when `marker`
+    is given, records that it was the one invoked."""
+    record = f'echo used >> "{marker.as_posix()}"\n' if marker is not None else ""
+    return _write_shim(path, f'{record}exec "{Path(sys.executable).as_posix()}" "$@"\n')
+
+
+def _store_placeholder(path: Path) -> Path:
+    """What `python3` on a fresh Windows PATH often is: the Microsoft Store
+    App Execution Alias — prints an install prompt, exits 9009, runs nothing."""
+    return _write_shim(
+        path,
+        'echo "Python was not found; run without arguments to install from the Microsoft Store" >&2\n'
+        "exit 9009\n",
+    )
+
+
+def _tools_dirs(tmp: Path) -> list[Path]:
+    """Directories carrying the utilities the hook itself calls (`sh`, `awk`,
+    `sed`, `cat`, `tr`) and deliberately NO Python. POSIX: an allowlist of
+    symlinks (macOS ships `/usr/bin/python3` as a stub, so narrowing PATH to
+    `/usr/bin` would not simulate a python-less machine). Windows: Git's own
+    `usr/bin`, which ships those tools and no Python."""
+    if IS_WINDOWS:
+        bash = _git_bash()
+        return [bash.parent.parent / "usr" / "bin"] if bash else []
+    minimal_bin = tmp / "minimal-bin"
+    minimal_bin.mkdir(exist_ok=True)
+    for tool in ("sh", "awk", "sed", "cat", "tr"):
+        found = shutil.which(tool)
+        link = minimal_bin / tool
+        if found and not link.exists():
+            os.symlink(found, link)
+    return [minimal_bin]
+
+
+def _plugin_copy(dest: Path, *, with_primer: bool = True) -> Path:
+    """A plugin root elsewhere (e.g. a path with a space) carrying what the
+    hook reads: `hooks/`, `bin/`, and optionally the primer."""
+    shutil.copytree(REPO_ROOT / "hooks", dest / "hooks")
+    shutil.copytree(REPO_ROOT / "bin", dest / "bin", ignore=shutil.ignore_patterns("__pycache__"))
+    primer_dir = dest / "skills" / "acing-hyperspace"
+    primer_dir.mkdir(parents=True)
+    if with_primer:
+        shutil.copy2(PRIMER_SRC, primer_dir / "SKILL.md")
+    return dest
+
+
+def _real_env(env_dir: Path, *, link: bool = True) -> Path:
+    """A genuine venv (stdlib-only), in this OS's own layout — `Scripts/python.exe`
+    on Windows — optionally with the `env/bin` link provisioning creates."""
+    subprocess.run([sys.executable, "-m", "venv", "--without-pip", str(env_dir)], check=True,
+                   capture_output=True)
+    if link:
+        ok, message = link_bin_to_scripts(env_dir)
+        assert ok, message
+    return native_python(env_dir)
 
 
 def _expected_primer_body() -> str:
@@ -87,86 +201,63 @@ def _extract_delivered_block(stdout: str) -> tuple[str | None, int, int]:
     return block, begin_count, end_count
 
 
-def _fake_bin_with_python3(tmp: Path) -> Path:
-    """A directory containing a `python3` executable that is `sys.executable`
-    under a guaranteed name, so the hook's `command -v python3` fallback
-    branch is exercised deterministically regardless of how this test run's
-    own interpreter happens to be named."""
-    fake_bin = tmp / "fake-bin"
-    fake_bin.mkdir(exist_ok=True)
-    target = fake_bin / "python3"
-    if not target.exists():
-        os.symlink(sys.executable, target)
-    return fake_bin
-
-
-def _minimal_bin_without_python(tmp: Path) -> Path:
-    """A directory carrying only the POSIX utilities `session-start.sh`
-    itself calls (`awk`, `sed`, `cat`, `tr`) — deliberately excluding
-    `python3`/`python`. macOS ships `/usr/bin/python3` as a stub, so simply
-    narrowing `PATH` to `/usr/bin:/bin` would not actually simulate a
-    python-less machine; this builds an explicit allowlist instead."""
-    minimal_bin = tmp / "minimal-bin"
-    minimal_bin.mkdir(exist_ok=True)
-    for tool in ("awk", "sed", "cat", "tr"):
-        found = shutil.which(tool)
-        if found:
-            link = minimal_bin / tool
-            if not link.exists():
-                os.symlink(found, link)
-    return minimal_bin
-
-
 class HookHarness(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
         self.tmp_path = Path(self._tmp.name)
-        self.project_dir = self.tmp_path / "project"
+        # A space in the project path, always: every path the hook builds
+        # must survive it (the Windows default profile path often has one).
+        self.project_dir = self.tmp_path / "my project"
         self.project_dir.mkdir()
         self.home = self.tmp_path / "home"
         self.home.mkdir()
-        self.fake_bin = _fake_bin_with_python3(self.tmp_path)
-        self.minimal_bin = _minimal_bin_without_python(self.tmp_path)
+        self.tools = _tools_dirs(self.tmp_path)
+        self.python_dir = self.tmp_path / "python-bin"
+        _python_shim(self.python_dir / "python3")
 
     def run_hook(
         self,
         *,
-        source: str,
+        source: str | None = "startup",
         session_id: str = "t",
-        use_project_env: bool = False,
-        no_python: bool = False,
+        path_dirs: list[Path] | None = None,
+        plugin_root: Path = REPO_ROOT,
+        stdin: str | None = None,
     ) -> subprocess.CompletedProcess[str]:
-        if use_project_env:
-            env_python = self.project_dir / ".hyperspace" / "env" / "bin" / "python"
-            env_python.parent.mkdir(parents=True, exist_ok=True)
-            if not env_python.exists():
-                os.symlink(sys.executable, env_python)
-            path_value = str(self.minimal_bin)
-        elif no_python:
-            path_value = str(self.minimal_bin)
-        else:
-            path_value = f"{self.fake_bin}:{self.minimal_bin}"
-
+        """Runs the hooks.json command as Claude Code would. `path_dirs`
+        (default: a working `python3`) is prepended to the tool dirs; pass
+        `[]` for a machine with no Python on PATH."""
+        dirs = [self.python_dir] if path_dirs is None else path_dirs
         env = {
             "HOME": str(self.home),
-            "PATH": path_value,
+            "PATH": os.pathsep.join(str(d) for d in [*dirs, *self.tools]),
+            # Native separators, as Claude Code exports them; the command
+            # string itself carries the forward-slash substitution.
             "CLAUDE_PROJECT_DIR": str(self.project_dir),
-            "CLAUDE_PLUGIN_ROOT": str(REPO_ROOT),
+            "CLAUDE_PLUGIN_ROOT": str(plugin_root),
         }
-        payload = json.dumps({"source": source, "session_id": session_id})
+        if IS_WINDOWS:
+            for key in ("SYSTEMROOT", "WINDIR", "COMSPEC", "TEMP", "TMP", "PATHEXT"):
+                if key in os.environ:
+                    env[key] = os.environ[key]
+        if stdin is None:
+            stdin = json.dumps({"source": source, "session_id": session_id})
         return subprocess.run(
-            [SH_PATH, str(HOOK_PATH)],
-            input=payload,
+            [*_hook_shell(), _hook_command(plugin_root)],
+            input=stdin,
             env=env,
             cwd=str(self.project_dir),
-            text=True,
             capture_output=True,
-            timeout=30,
+            encoding="utf-8",
+            timeout=60,
             check=False,
         )
 
-    # -- fixture builders -------------------------------------------------
+    def assertRan(self, result: subprocess.CompletedProcess[str]) -> None:
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
+    # -- project fixtures -------------------------------------------------
 
     def init_run(self, goal_slug: str = "demo-goal") -> Path:
         runs_dir = self.project_dir / "hyperspace" / "runs"
@@ -208,6 +299,9 @@ class HookHarness(unittest.TestCase):
         config_path.write_text(text, encoding="utf-8")
         return config_path
 
+    def fresh_sessions_used(self, state_path: Path) -> int:
+        return json.loads(state_path.read_text(encoding="utf-8"))["budget"]["fresh_sessions"]["used"]
+
 
 # (a) ----------------------------------------------------------------------
 
@@ -218,7 +312,7 @@ class PrimerDeliveryTests(HookHarness):
         for source in SESSION_EVENTS:
             with self.subTest(source=source):
                 result = self.run_hook(source=source)
-                self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+                self.assertRan(result)
                 delivered, begin_count, end_count = _extract_delivered_block(result.stdout)
                 self.assertEqual(1, begin_count, f"marker_begin count={begin_count}")
                 self.assertEqual(1, end_count, f"marker_end count={end_count}")
@@ -232,31 +326,23 @@ class PrimerDeliveryTests(HookHarness):
         (not itself one of the brief's numbered RED assertions, but the same
         failure-visibility shape: a missing shipped file must not be a silent
         empty block)."""
-        # CLAUDE_PLUGIN_ROOT points at an empty tree so the primer file is
-        # genuinely absent, without touching the real checkout.
-        empty_root = self.tmp_path / "empty-plugin-root"
-        (empty_root / "skills" / "acing-hyperspace").mkdir(parents=True)
-        env = {
-            "HOME": str(self.home),
-            "PATH": f"{self.fake_bin}:{self.minimal_bin}",
-            "CLAUDE_PROJECT_DIR": str(self.project_dir),
-            "CLAUDE_PLUGIN_ROOT": str(empty_root),
-        }
-        result = subprocess.run(
-            [SH_PATH, str(HOOK_PATH)],
-            input=json.dumps({"source": "startup", "session_id": "t"}),
-            env=env,
-            cwd=str(self.project_dir),
-            text=True,
-            capture_output=True,
-            timeout=30,
-            check=False,
-        )
-        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        plugin_root = _plugin_copy(self.tmp_path / "plugin without primer", with_primer=False)
+        result = self.run_hook(plugin_root=plugin_root)
+        self.assertRan(result)
         delivered, begin_count, end_count = _extract_delivered_block(result.stdout)
         self.assertEqual(1, begin_count)
         self.assertEqual(1, end_count)
         self.assertIn("MISSING", delivered)
+
+    def test_plugin_root_with_a_space_delivers_primer_and_runs_the_python_half(self) -> None:
+        plugin_root = _plugin_copy(self.tmp_path / "plugin root with space")
+        state_path = self.init_run("space-goal")
+        result = self.run_hook(plugin_root=plugin_root)
+        self.assertRan(result)
+        delivered, _, _ = _extract_delivered_block(result.stdout)
+        self.assertEqual(_expected_primer_body(), delivered)
+        self.assertIn("goal=space-goal", result.stdout)
+        self.assertEqual(1, self.fresh_sessions_used(state_path))
 
 
 # (b), (c), (d) --------------------------------------------------------------
@@ -272,7 +358,7 @@ class ActiveRunAndBudgetTests(HookHarness):
         state.save()
 
         result = self.run_hook(source="resume")
-        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertRan(result)
         self.assertIn("goal=demo-goal", result.stdout)
         self.assertIn("status=framing", result.stdout)
         self.assertIn("node=framing", result.stdout)
@@ -288,55 +374,43 @@ class ActiveRunAndBudgetTests(HookHarness):
         state.save()
 
         result = self.run_hook(source="startup")
-        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertRan(result)
         self.assertNotIn("goal=finished-goal", result.stdout)
 
     def test_startup_and_compact_bump_exactly_once_resume_and_clear_do_not(self) -> None:
         state_path = self.init_run("budget-goal")
 
-        result = self.run_hook(source="resume")
-        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
-        data = json.loads(state_path.read_text(encoding="utf-8"))
-        self.assertEqual(0, data["budget"]["fresh_sessions"]["used"])
-        self.assertEqual(0, data["budget"]["compactions"]["used"])
+        def used() -> tuple[int, int]:
+            data = json.loads(state_path.read_text(encoding="utf-8"))
+            return data["budget"]["fresh_sessions"]["used"], data["budget"]["compactions"]["used"]
 
-        result = self.run_hook(source="clear")
-        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
-        data = json.loads(state_path.read_text(encoding="utf-8"))
-        self.assertEqual(0, data["budget"]["fresh_sessions"]["used"])
-        self.assertEqual(0, data["budget"]["compactions"]["used"])
-
-        result = self.run_hook(source="startup")
-        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
-        data = json.loads(state_path.read_text(encoding="utf-8"))
-        self.assertEqual(1, data["budget"]["fresh_sessions"]["used"])
-        self.assertEqual(0, data["budget"]["compactions"]["used"])
-
-        result = self.run_hook(source="compact")
-        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
-        data = json.loads(state_path.read_text(encoding="utf-8"))
-        self.assertEqual(1, data["budget"]["fresh_sessions"]["used"])
-        self.assertEqual(1, data["budget"]["compactions"]["used"])
+        for source, expected in (("resume", (0, 0)), ("clear", (0, 0)),
+                                 ("startup", (1, 0)), ("compact", (1, 1))):
+            result = self.run_hook(source=source)
+            self.assertRan(result)
+            self.assertEqual(expected, used(), f"after source={source}")
 
     def test_notify_line_appears_once_soft_cap_crossed(self) -> None:
         self.init_run("cap-goal")
 
         result = self.run_hook(source="startup")
-        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertRan(result)
         self.assertNotIn("soft cap crossed", result.stdout)
 
         result = self.run_hook(source="startup")
-        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertRan(result)
         self.assertIn("fresh_sessions: 2>1", result.stdout)
         self.assertIn("soft cap crossed", result.stdout)
 
     def test_bump_and_notify_also_work_via_project_hyperspace_env_python(self) -> None:
         state_path = self.init_run("env-goal")
-        result = self.run_hook(source="startup", use_project_env=True)
-        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
-        data = json.loads(state_path.read_text(encoding="utf-8"))
-        self.assertEqual(1, data["budget"]["fresh_sessions"]["used"])
+        marker = self.tmp_path / "env-python-used"
+        _python_shim(self.project_dir / ".hyperspace" / "env" / "bin" / "python", marker)
+        result = self.run_hook(source="startup", path_dirs=[])
+        self.assertRan(result)
+        self.assertEqual(1, self.fresh_sessions_used(state_path))
         self.assertIn("goal=env-goal", result.stdout)
+        self.assertTrue(marker.is_file(), "the project env's interpreter was not the one used")
 
 
 # (e), (f) --------------------------------------------------------------
@@ -351,7 +425,7 @@ class WorklogTests(HookHarness):
         self.make_graph_db(rows)
 
         result = self.run_hook(source="startup")
-        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertRan(result)
         # Newest 5 (indices 6..2) present.
         for i in range(6, 1, -1):
             self.assertIn(f"summary-marker-{i}", result.stdout)
@@ -362,10 +436,18 @@ class WorklogTests(HookHarness):
         # Field-selective: project/tags/client/surface/work_item_id never leak.
         self.assertNotIn("demo-project", result.stdout)
 
+    def test_non_ascii_worklog_summary_arrives_as_utf8(self) -> None:
+        """A Windows pipe defaults to the ANSI code page; the hook's Python
+        half must still write UTF-8 (strict decoding in `run_hook`)."""
+        self.make_graph_db([("2026-09-27T00:00:00Z", "someone", "arrow → and em — dash ✔")])
+        result = self.run_hook(source="startup")
+        self.assertRan(result)
+        self.assertIn("arrow → and em — dash ✔", result.stdout)
+
     def test_no_worklog_block_when_graph_db_absent(self) -> None:
         (self.project_dir / ".hyperspace").mkdir(parents=True)
         result = self.run_hook(source="startup")
-        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertRan(result)
         self.assertNotIn("## Recent worklog", result.stdout)
 
     def test_worklog_block_omitted_when_config_declares_other_owner(self) -> None:
@@ -373,7 +455,7 @@ class WorklogTests(HookHarness):
         self.write_config('worklog_owner = "some-other-tool"\n')
 
         result = self.run_hook(source="startup")
-        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertRan(result)
         self.assertNotIn("should-not-appear", result.stdout)
         self.assertNotIn("## Recent worklog", result.stdout)
 
@@ -382,25 +464,122 @@ class WorklogTests(HookHarness):
         self.write_config('judge = "none"\nworklog_owner = "hyperspace-engine"\n')
 
         result = self.run_hook(source="startup")
-        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertRan(result)
         self.assertIn("should-appear", result.stdout)
 
 
 # (g) ----------------------------------------------------------------------
 
 
-class NoHyperspaceSetupPointerTests(HookHarness):
+class SetupStateTests(HookHarness):
     def test_no_hyperspace_dir_still_prints_primer_plus_setup_pointer(self) -> None:
         result = self.run_hook(source="startup")
-        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertRan(result)
         delivered, begin_count, end_count = _extract_delivered_block(result.stdout)
         self.assertEqual(1, begin_count)
         self.assertEqual(1, end_count)
         self.assertIsNotNone(delivered)
         self.assertIn("hyperspace-setup", result.stdout)
 
+    def test_setup_pointer_needs_no_python(self) -> None:
+        result = self.run_hook(source="startup", path_dirs=[])
+        self.assertRan(result)
+        self.assertIn("No .hyperspace/ found", result.stdout)
+        self.assertIn("hyperspace-setup", result.stdout)
+
+    def test_hyperspace_dir_without_env_names_the_missing_interpreter(self) -> None:
+        """The MCP server is `.hyperspace/env/bin/python -m hyperspace.mcp`;
+        with no environment it cannot start, and nothing else would say why —
+        Claude Code shows only "failed to connect". The hook says it, with no
+        Python required."""
+        self.make_graph_db([])
+        result = self.run_hook(source="startup", path_dirs=[])
+        self.assertRan(result)
+        self.assertIn("MCP server cannot start", result.stdout)
+        self.assertIn(".hyperspace/env/bin/python", result.stdout)
+        self.assertIn("hyperspace-setup", result.stdout)
+
+    def test_no_missing_env_line_once_the_env_exists(self) -> None:
+        self.make_graph_db([])
+        _python_shim(self.project_dir / ".hyperspace" / "env" / "bin" / "python")
+        result = self.run_hook(source="startup")
+        self.assertRan(result)
+        self.assertNotIn("MCP server cannot start", result.stdout)
+        self.assertNotIn("No .hyperspace/ found", result.stdout)
+
 
 # (h) ----------------------------------------------------------------------
+
+
+class InterpreterResolutionTests(HookHarness):
+    """Which Python the hook runs, on every OS. Observable without the hook
+    printing any path: with no other Python on PATH, the active-run line only
+    appears if the expected interpreter ran."""
+
+    def test_real_provisioned_env_is_used_with_nothing_on_path(self) -> None:
+        """A genuine venv in this OS's own layout, linked the way provisioning
+        links it (a junction on Windows, nothing to do on POSIX)."""
+        state_path = self.init_run("real-env-goal")
+        _real_env(self.project_dir / ".hyperspace" / "env")
+        result = self.run_hook(source="startup", path_dirs=[])
+        self.assertRan(result)
+        self.assertIn("goal=real-env-goal", result.stdout)
+        self.assertEqual(1, self.fresh_sessions_used(state_path))
+        self.assertNotIn("MCP server cannot start", result.stdout)
+
+    def test_windows_scripts_layout_without_the_bin_link_is_still_used(self) -> None:
+        """An env whose `bin` link is missing still runs the hook's Python
+        half from `Scripts/python.exe` — while the hook says the MCP server
+        (which needs `env/bin/python`) cannot start."""
+        state_path = self.init_run("scripts-goal")
+        env_dir = self.project_dir / ".hyperspace" / "env"
+        if IS_WINDOWS:
+            _real_env(env_dir, link=False)
+        else:
+            _python_shim(env_dir / "Scripts" / "python.exe")
+        result = self.run_hook(source="startup", path_dirs=[])
+        self.assertRan(result)
+        self.assertIn("goal=scripts-goal", result.stdout)
+        self.assertEqual(1, self.fresh_sessions_used(state_path))
+        self.assertIn("MCP server cannot start", result.stdout)
+
+    def test_microsoft_store_placeholder_is_skipped_not_trusted(self) -> None:
+        state_path = self.init_run("stub-goal")
+        stub_dir = self.tmp_path / "windowsapps"
+        _store_placeholder(stub_dir / "python3")
+        marker = self.tmp_path / "python-used"
+        _python_shim(self.tmp_path / "later-bin" / "python", marker)
+        result = self.run_hook(source="startup", path_dirs=[stub_dir, self.tmp_path / "later-bin"])
+        self.assertRan(result)
+        self.assertIn("goal=stub-goal", result.stdout)
+        self.assertEqual(1, self.fresh_sessions_used(state_path))
+        self.assertTrue(marker.is_file())
+        self.assertNotIn("Microsoft Store", result.stdout + result.stderr)
+
+    def test_py_launcher_is_used_with_its_version_flag(self) -> None:
+        """python.org's installer gives Windows `py`, often without `python3`."""
+        state_path = self.init_run("py-goal")
+        _write_shim(
+            self.tmp_path / "launcher-bin" / "py",
+            '[ "$1" = "-3" ] || { echo "py: expected -3" >&2; exit 9; }\n'
+            "shift\n"
+            f'exec "{Path(sys.executable).as_posix()}" "$@"\n',
+        )
+        result = self.run_hook(source="startup", path_dirs=[self.tmp_path / "launcher-bin"])
+        self.assertRan(result)
+        self.assertIn("goal=py-goal", result.stdout)
+        self.assertEqual(1, self.fresh_sessions_used(state_path))
+
+    def test_too_old_python_is_skipped(self) -> None:
+        self.init_run("old-goal")
+        _write_shim(self.tmp_path / "old-bin" / "python3", "exit 1\n")  # fails the >= 3.11 probe
+        result = self.run_hook(source="startup", path_dirs=[self.tmp_path / "old-bin"])
+        self.assertRan(result)
+        self.assertNotIn("goal=old-goal", result.stdout)
+        self.assertIn("No Python 3.11+ found", result.stdout)
+
+
+# (i) ----------------------------------------------------------------------
 
 
 class FailOpenTests(HookHarness):
@@ -410,45 +589,31 @@ class FailOpenTests(HookHarness):
         (runs_dir / "loop.state.json").write_text("{not json", encoding="utf-8")
 
         result = self.run_hook(source="startup")
-        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertRan(result)
         delivered, begin_count, end_count = _extract_delivered_block(result.stdout)
         self.assertEqual(1, begin_count)
         self.assertEqual(1, end_count)
         self.assertIsNotNone(delivered)
 
     def test_exits_0_on_empty_stdin(self) -> None:
-        env = {
-            "HOME": str(self.home),
-            "PATH": f"{self.fake_bin}:{self.minimal_bin}",
-            "CLAUDE_PROJECT_DIR": str(self.project_dir),
-            "CLAUDE_PLUGIN_ROOT": str(REPO_ROOT),
-        }
-        result = subprocess.run(
-            [SH_PATH, str(HOOK_PATH)],
-            input="",
-            env=env,
-            cwd=str(self.project_dir),
-            text=True,
-            capture_output=True,
-            timeout=30,
-            check=False,
-        )
-        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        result = self.run_hook(stdin="")
+        self.assertRan(result)
+        self.assertIn("source=unknown", result.stdout)
         delivered, begin_count, end_count = _extract_delivered_block(result.stdout)
         self.assertEqual(1, begin_count)
         self.assertEqual(1, end_count)
 
     def test_exits_0_and_names_one_visible_line_when_no_python_available(self) -> None:
         self.init_run("no-python-goal")
-        result = self.run_hook(source="startup", no_python=True)
-        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        result = self.run_hook(source="startup", path_dirs=[])
+        self.assertRan(result)
         delivered, begin_count, end_count = _extract_delivered_block(result.stdout)
         self.assertEqual(1, begin_count)
         self.assertEqual(1, end_count)
         self.assertIn("python3", result.stdout)
 
 
-# (i) ----------------------------------------------------------------------
+# (j) ----------------------------------------------------------------------
 
 
 class SizeBudgetTests(HookHarness):
@@ -465,7 +630,7 @@ class SizeBudgetTests(HookHarness):
         for source in SESSION_EVENTS:
             with self.subTest(source=source):
                 result = self.run_hook(source=source)
-                self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+                self.assertRan(result)
                 sizes[source] = len(result.stdout)
                 self.assertLessEqual(
                     sizes[source],
@@ -473,7 +638,38 @@ class SizeBudgetTests(HookHarness):
                     f"source={source} produced {sizes[source]} chars > "
                     f"{HOOK_OUTPUT_CHAR_CAP} char hook-output cap",
                 )
-        print(f"session-start.sh output sizes (chars): {sizes}", file=sys.stderr)
+        print(f"session-start hook output sizes (chars): {sizes}", file=sys.stderr)
+
+
+# (k) the Python half, called directly ---------------------------------------
+
+
+def _load_session_start():
+    spec = importlib.util.spec_from_file_location("hook_session_start", HOOK_PY_PATH)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+class PythonHalfTests(HookHarness):
+    def test_render_owner_yield_and_owner_keep(self) -> None:
+        module = _load_session_start()
+        self.make_graph_db([("2026-09-27T00:00:00Z", "someone", "row-summary")])
+        self.assertIn("row-summary", module.render(self.project_dir, REPO_ROOT, "resume"))
+        self.write_config('worklog_owner = "some-other-tool"\n')
+        self.assertNotIn("row-summary", module.render(self.project_dir, REPO_ROOT, "resume"))
+
+    def test_render_accepts_backslash_and_forward_slash_paths_alike(self) -> None:
+        module = _load_session_start()
+        self.init_run("slash-goal")
+        native = module.render(Path(str(self.project_dir)), REPO_ROOT, "resume")
+        forward = module.render(Path(self.project_dir.as_posix()), Path(REPO_ROOT.as_posix()), "resume")
+        self.assertIn("goal=slash-goal", native)
+        self.assertEqual(native, forward)
+
+    def test_main_never_raises_on_bad_arguments(self) -> None:
+        module = _load_session_start()
+        self.assertEqual(0, module.main([]))
 
 
 # hooks.json shape -----------------------------------------------------------
@@ -494,9 +690,17 @@ class HooksManifestTests(unittest.TestCase):
             any("session-start.sh" in c and "CLAUDE_PLUGIN_ROOT" in c for c in commands)
         )
 
-    def test_hook_script_is_executable(self) -> None:
-        mode = HOOK_PATH.stat().st_mode
-        self.assertTrue(mode & stat.S_IXUSR, "hooks/session-start.sh must be chmod +x")
+    def test_hook_script_is_executable_in_the_git_index(self) -> None:
+        """The mode git records (and every clone reproduces). Read from the
+        index rather than the filesystem: NTFS has no POSIX execute bit, so a
+        Windows checkout's `stat` cannot answer this."""
+        proc = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "ls-files", "-s", "--", "hooks/session-start.sh"],
+            capture_output=True, encoding="utf-8",
+        )
+        if proc.returncode != 0 or not proc.stdout.strip():
+            self.skipTest("not a git checkout — the index mode is unreadable here")
+        self.assertTrue(proc.stdout.startswith("100755 "), proc.stdout)
 
 
 if __name__ == "__main__":

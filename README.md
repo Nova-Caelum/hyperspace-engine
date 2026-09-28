@@ -23,8 +23,13 @@ Nova Caelum service.
 
 ## Try it in five minutes
 
-**You need:** Claude Code, and Python 3.11 or newer available as `python3`. If
-[`uv`](https://docs.astral.sh/uv/) is installed, setup uses it to build the environment faster.
+**You need:** Claude Code, and Python 3.11 or newer — or [`uv`](https://docs.astral.sh/uv/), which
+setup can use in place of a system Python and which builds the environment faster either way.
+
+- **macOS / Linux:** Python 3.11+ as `python3`, or `uv`.
+- **Windows 11:** Python 3.11+ from [python.org](https://www.python.org/downloads/windows/) (it adds
+  the `py` launcher), or `uv`; and [Git for Windows](https://git-scm.com/downloads/win) — Claude Code
+  runs this plugin's session hook through Git Bash.
 
 **1. Install the plugin** in the project you want to use it in:
 
@@ -51,8 +56,9 @@ files the work as rows in the task graph, builds it, and closes each row through
 **4. Watch it close.** In the console, the row moves to **done** — stamped by the verifier, not by
 the agent.
 
-If anything looks wrong, run `.hyperspace/env/bin/hyperspace doctor`: one `OK` / `FAIL` line per
-check (Python, environment, store, judge, console port).
+If anything looks wrong, run `.hyperspace/env/bin/hyperspace doctor` from the project folder (the
+same command on every OS, PowerShell included): one `OK` / `FAIL` line per check (Python,
+environment, store, judge, console port).
 
 ---
 
@@ -109,11 +115,11 @@ between judges are in [`docs/05_design_rationale.md`](docs/05_design_rationale.m
 
 ## Platform support
 
-| Platform | v0.1 |
+| Platform | v0.1.3 |
 |---|---|
 | macOS | Verified end to end: public-marketplace install through a verifier-closed row read back from the console |
-| Linux | The full test suite and the scan probes run in CI on Ubuntu |
-| Windows | Not yet supported — the MCP launcher is a POSIX shell script. See [`docs/09_future_states.md`](docs/09_future_states.md). |
+| Linux | CI: the full test suite, real provisioning, the MCP server, and the real `claude` binary starting it and running the session hook |
+| Windows 11 | CI (Windows Server runner): the same set as Linux, plus the launcher and every command form the skills use in Git Bash, PowerShell and cmd. Needs Git for Windows. The interactive path on a real Windows 11 PC is the remaining proof |
 
 ---
 
@@ -158,11 +164,11 @@ Claude Code resolves the range against this repository's `hyperspace-engine--v<v
 ## Development
 
 ```bash
-uv venv .venv && uv pip install --python .venv/bin/python -e ".[dev]"
-.venv/bin/python -m pytest tests/ -q
+uv venv && uv pip install -e ".[dev]"
+uv run python -m pytest tests/ -q
 ```
 
-The suite has 223 tests. CI also validates the plugin manifest in strict mode, runs the scan probes
+The same two commands work on macOS, Linux and Windows. The suite runs on all three in CI. CI also validates the plugin manifest in strict mode, runs the scan probes
 that keep the shipped tree free of private paths and names, and checks that the console bundle
 rebuilds byte for byte from its pinned source. Agents working in this repository should read
 [`CLAUDE.md`](CLAUDE.md) first.

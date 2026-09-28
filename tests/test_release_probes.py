@@ -50,7 +50,7 @@ def test_run_py_accepts_whole_path_and_consumable_names(tmp_path):
     proc = subprocess.run(
         [str(_venv_python()), str(ROOT / "probes" / "run.py"), "--out", str(out_dir),
          "--stop-before", "session", "--source", "local", "whole_path"],
-        cwd=ROOT, capture_output=True, text=True, timeout=180,
+        cwd=ROOT, capture_output=True, encoding="utf-8", errors="replace", timeout=180,
     )
     assert proc.returncode != 2, proc.stdout + proc.stderr
     assert "unknown probe name" not in proc.stderr
@@ -63,7 +63,8 @@ def test_run_py_all_still_excludes_the_two_new_probes():
 
     assert "whole_path" not in PROBES
     assert "consumable" not in PROBES
-    assert set(EXTRA_PROBES) == {"whole_path", "consumable"}
+    assert "claude_runtime" not in PROBES
+    assert set(EXTRA_PROBES) == {"whole_path", "consumable", "claude_runtime"}
 
 
 # ── (c) stop_before session — a rehearsal never PASSes ──────────────────
@@ -81,7 +82,7 @@ def test_probe_whole_path_stop_before_session_fails_by_design(tmp_path):
     ok = probe_whole_path.run(tmp_path, opts)
     assert ok is False
 
-    payload = json.loads((tmp_path / "whole_path.json").read_text())
+    payload = json.loads((tmp_path / "whole_path.json").read_text(encoding="utf-8"))
     assert payload["result"] == "FAIL"
     assert payload["evidence"]["session"] == {"ran": False, "reason": "rehearsal"}
     # every earlier step is recorded as having run (and passed) — install,
@@ -95,21 +96,18 @@ def test_probe_whole_path_stop_before_session_fails_by_design(tmp_path):
 
 
 async def _fake_session_side_effects(project_dir: Path, config_dir: Path) -> tuple[str, str]:
-    """Stands in for a real `claude -p` session: talks to the SAME installed
-    launcher a real session would (`hyperspace`'s `.mcp.json` entry), filing
-    and closing one real work item — so the probe's step 6 readback has a
-    real row to find, exactly as a genuine session would have left one."""
-    from mcp import StdioServerParameters
+    """Stands in for a real `claude -p` session: starts the server exactly as
+    the installed plugin's `.mcp.json` entry says (the same command a real
+    session would spawn), filing and closing one real work item — so the
+    probe's step 6 readback has a real row to find, exactly as a genuine
+    session would have left one."""
     from mcp.client.session import ClientSession
     from mcp.client.stdio import stdio_client
 
-    from probes.probe_whole_path import _find_installed_launcher
+    from probes.probe_whole_path import installed_mcp_params
 
-    launcher = _find_installed_launcher(config_dir)
-    assert launcher is not None, "installed launcher not found under the fake config dir"
-
-    env = {**os.environ, "CLAUDE_PROJECT_DIR": str(project_dir)}
-    params = StdioServerParameters(command="sh", args=[str(launcher)], env=env)
+    params = installed_mcp_params(config_dir, project_dir)
+    assert params is not None, "installed .mcp.json not found under the fake config dir"
 
     ext = "whole-path-test:add-hello"
     candidate = {
@@ -182,7 +180,7 @@ def test_probe_whole_path_with_fake_session_runner_passes(tmp_path):
     )
     ok = probe_whole_path.run(tmp_path, opts)
 
-    payload = json.loads((tmp_path / "whole_path.json").read_text())
+    payload = json.loads((tmp_path / "whole_path.json").read_text(encoding="utf-8"))
     assert ok is True, payload["evidence"]
     assert payload["result"] == "PASS"
     assert payload["evidence"]["session"]["ran"] is True
@@ -212,7 +210,7 @@ def test_probe_whole_path_session_only_resumes_a_kept_rehearsal(tmp_path):
     rehearsal_ok = probe_whole_path.run(tmp_path, rehearsal_opts)
     assert rehearsal_ok is False  # a rehearsal never PASSes — INC022
 
-    rehearsal_payload = json.loads((tmp_path / "whole_path.json").read_text())
+    rehearsal_payload = json.loads((tmp_path / "whole_path.json").read_text(encoding="utf-8"))
     project_dir = rehearsal_payload["evidence"]["temp_dirs"]["project_dir"]
     config_dir = rehearsal_payload["evidence"]["temp_dirs"]["config_dir"]
     assert rehearsal_payload["evidence"]["temp_dirs"]["marker_written"] is True
@@ -224,7 +222,7 @@ def test_probe_whole_path_session_only_resumes_a_kept_rehearsal(tmp_path):
         )
         ok = probe_whole_path.run(tmp_path, session_only_opts)
 
-        payload = json.loads((tmp_path / "whole_path.json").read_text())
+        payload = json.loads((tmp_path / "whole_path.json").read_text(encoding="utf-8"))
         assert ok is True, payload["evidence"]
         assert payload["result"] == "PASS"
         assert payload["evidence"]["session_only"]["project_dir"] == project_dir
@@ -246,7 +244,7 @@ def test_probe_consumable_local_records_dependency_attempt(tmp_path):
     opts = argparse.Namespace(source="local")
     ok = probe_consumable.run(tmp_path, opts)
 
-    payload = json.loads((tmp_path / "consumable.json").read_text())
+    payload = json.loads((tmp_path / "consumable.json").read_text(encoding="utf-8"))
     # tag is never present in a local rehearsal (no release cut yet) — FAIL
     # by design, same INC022 discipline as whole_path's --stop-before session.
     assert payload["evidence"]["tag"]["present"] is False

@@ -118,7 +118,7 @@ def _run_command(check_id: str, target: str | None, ctx: EvidenceContext) -> Pre
         repo = ctx.repo or ctx.workspace
         proc = subprocess.run(
             ["git", "-C", str(repo), "status", "--porcelain"],
-            capture_output=True, text=True,
+            capture_output=True, encoding="utf-8", errors="replace",
         )
         changed = [l for l in proc.stdout.splitlines() if l.strip()]
         return PredicateResult(
@@ -143,7 +143,7 @@ def _run_command(check_id: str, target: str | None, ctx: EvidenceContext) -> Pre
     # is an argument, not syntax — and the contract refuses those anyway.
     if target:
         argv = [*argv, target]
-    proc = subprocess.run(argv, cwd=str(cwd), capture_output=True, text=True)
+    proc = subprocess.run(argv, cwd=str(cwd), capture_output=True, encoding="utf-8", errors="replace")
     return PredicateResult(
         satisfied=proc.returncode == 0,
         evidence=f"`{' '.join(argv)}` exited {proc.returncode}",
@@ -181,8 +181,8 @@ def _git_or_mtime(path: Path, root: Path) -> datetime | None:
         rel = path
     try:
         proc = subprocess.run(
-            ["git", "-C", str(root), "log", "-1", "--format=%aI", "--", str(rel)],
-            capture_output=True, text=True, timeout=10,
+            ["git", "-C", str(root), "log", "-1", "--format=%aI", "--", Path(rel).as_posix()],
+            capture_output=True, encoding="utf-8", errors="replace", timeout=10,
         )
         ts = proc.stdout.strip()
         if proc.returncode == 0 and ts:

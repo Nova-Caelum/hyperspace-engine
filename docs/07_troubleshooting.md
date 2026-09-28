@@ -184,6 +184,25 @@ bug worth reporting, with the message and the artifact that produced it.
 
 ---
 
+## 8. Setup, the environment, and Windows
+
+Messages from the session preload (the `SessionStart` hook), `hyperspace doctor`, the launcher, and
+Claude Code's own `/mcp` / `claude mcp list`. The same on macOS, Linux and Windows unless the row
+says otherwise.
+
+| Message | Means | Do |
+|---|---|---|
+| `No .hyperspace/ found in this project yet` | This project was never set up. | Say "set up hyperspace". |
+| `The hyperspace MCP server cannot start: <path> is missing` | `.hyperspace/` exists but its environment does not — the server Claude Code starts is `.hyperspace/env/bin/python -m hyperspace.mcp`. `/mcp` shows it as `✘ Failed to connect` — `ENOENT … .hyperspace/env/bin/python` on macOS and Linux, `CONNECTION_CLOSED: Connection closed` on Windows. | Run the `hyperspace-setup` skill again, then restart the session. |
+| `No Python 3.11+ found (tried the project environment, python3, python, py -3)` | The preload found no usable interpreter, so it skipped the active-run and worklog blocks. The primer still arrived. | Install Python 3.11+ (python.org — on Windows it adds the `py` launcher) or `uv`, then run setup. |
+| `Python was not found; run without arguments to install from the Microsoft Store` *(Windows)* | `python` / `python3` is Windows' Store placeholder, not a Python. The preload and the setup skill both skip it. | Install Python from python.org (or `uv`); the placeholder can stay. |
+| `found <path>, but <path> does not reach it — the env/bin junction is missing` *(Windows, `doctor`)* | The environment exists in Windows' own layout (`Scripts\python.exe`) but `.hyperspace/env/bin`, the path `.mcp.json` and the skills use, does not lead to it. | Re-run the `hyperspace-setup` skill. If it fails again, the project is on a drive that cannot hold a directory junction (exFAT/FAT32, some network shares) — move it to an NTFS drive. |
+| `Hyperspace: .hyperspace\env\Scripts\hyperspace.exe is missing.` *(Windows launcher)* | `Open Hyperspace.bat` was run in a project whose environment is gone. | Run the `hyperspace-setup` skill in Claude Code for this project, then open the launcher again. |
+| No preload at all — no primer, no status line — at session start *(Windows)* | Claude Code runs plugin hooks through Git Bash on Windows and falls back to PowerShell without it; this plugin's hook needs Git Bash. | Install Git for Windows. If it is installed somewhere unusual, set `CLAUDE_CODE_GIT_BASH_PATH` to its `bin\bash.exe`. |
+| `port <n> is in use — pass --port <other> or set port in .hyperspace/config.toml` | Something already listens on the console port. `doctor` tells you whether it is this project's own door. | If it is ours, just open the URL. Otherwise pick another port. |
+
+---
+
 | | |
 |---|---|
 | **What each gate checks** | [`02_the_loop_and_gates.md`](02_the_loop_and_gates.md) |

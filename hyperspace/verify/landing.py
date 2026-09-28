@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any
 
 from .delta import PathDelta, discover_repo, path_delta, read_full, unclaimed_changes
+from ..venv_paths import find_venv_python
 from .predicates import _COMMANDS, _git_or_mtime, _resolve_in_root
 
 COMMAND_TIMEOUT = 300
@@ -256,16 +257,10 @@ def _file_state(v: Any, roots: list[Path], deltas: _Deltas) -> LandingVerdict:
 # own interpreter, which does not have the user's project dependencies.
 # `_command()` overrides `argv[0]` only when it is still that frozen default
 # (never for `["make", "build"]`). Walked from the target's directory up to
-# `cwd` (never beyond it): the first co-located `<dir>/.venv/bin/python(3)`
-# wins; none found falls back to `sys.executable`.
-
-
-def _venv_python(venv_dir: Path) -> Path | None:
-    for name in ("python3", "python"):
-        candidate = venv_dir / "bin" / name
-        if candidate.is_file():
-            return candidate
-    return None
+# `cwd` (never beyond it): the first co-located `<dir>/.venv` interpreter
+# wins — `bin/python3`, `bin/python`, or Windows' `Scripts/python.exe`
+# (`hyperspace.venv_paths.find_venv_python`); none found falls back to
+# `sys.executable`.
 
 
 def _resolve_interpreter(cwd: Path, target: Path | None) -> str:
@@ -274,7 +269,7 @@ def _resolve_interpreter(cwd: Path, target: Path | None) -> str:
     anchor = cwd.resolve()
     d = (target.parent if target is not None else cwd).resolve()
     while True:
-        found = _venv_python(d / ".venv")
+        found = find_venv_python(d / ".venv")
         if found is not None:
             return str(found)
         if d == anchor or d.parent == d:
@@ -341,7 +336,8 @@ def _command(v: Any, roots: list[Path], touched: list[tuple[Path, str]], deltas:
         # "build"]` never matches this and is untouched.
         argv[0] = _resolve_interpreter(cwd, resolved_target)
     try:
-        proc = subprocess.run(argv, cwd=str(cwd), capture_output=True, text=True, timeout=COMMAND_TIMEOUT)
+        proc = subprocess.run(argv, cwd=str(cwd), capture_output=True, encoding="utf-8", errors="replace",
+                              timeout=COMMAND_TIMEOUT)
     except (OSError, subprocess.TimeoutExpired) as exc:
         return LandingVerdict("", kind, False, False, True, f"`{' '.join(argv)}` could not run: {exc}")
     ok = proc.returncode == 0

@@ -511,7 +511,7 @@ def test_list_agents_reads_config(tmp_path):
     db_path = tmp_path / ".hyperspace" / "graph.db"
     s = Store.init(db_path)  # creates .hyperspace/ first
     config_path = tmp_path / ".hyperspace" / "config.toml"
-    config_path.write_text('judge = "anthropic"\n')
+    config_path.write_text('judge = "anthropic"\n', encoding="utf-8")
     try:
         agents = list_agents(s)
         assert agents[0]["agent_name"] == "anthropic"

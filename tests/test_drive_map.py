@@ -25,7 +25,7 @@ class DriveMapTests(unittest.TestCase):
         self._tmp = tempfile.TemporaryDirectory()
         self.run = Path(self._tmp.name) / "a-run"
         self.run.mkdir()
-        (self.run / "loop.state.json").write_text("{}")
+        (self.run / "loop.state.json").write_text("{}", encoding="utf-8")
 
     def tearDown(self) -> None:
         self._tmp.cleanup()
@@ -35,7 +35,7 @@ class DriveMapTests(unittest.TestCase):
         for name, (_, create) in drive_map.FOLDERS.items():
             self.assertEqual((self.run / name).is_dir(), create, name)
         self.assertEqual(drive_map.check(self.run), [])
-        self.assertIn("- `DRIVE_MAP.md`", (self.run / "DRIVE_MAP.md").read_text())
+        self.assertIn("- `DRIVE_MAP.md`", (self.run / "DRIVE_MAP.md").read_text(encoding="utf-8"))
 
     def test_a_relative_run_dir_renders_the_same_map(self) -> None:
         drive_map.write(self.run)
@@ -50,10 +50,10 @@ class DriveMapTests(unittest.TestCase):
         self.assertEqual(drive_map.check(self.run), ["DRIVE_MAP.md is missing"])
 
     def test_added_and_removed_files_make_the_map_stale_by_name(self) -> None:
-        (self.run / "gone.md").write_text("x")
+        (self.run / "gone.md").write_text("x", encoding="utf-8")
         drive_map.write(self.run)
         (self.run / "gone.md").unlink()
-        (self.run / "notes" / "new.md").write_text("x")
+        (self.run / "notes" / "new.md").write_text("x", encoding="utf-8")
         self.assertEqual(
             drive_map.check(self.run),
             ["on disk, not in the map: notes/new.md", "in the map, not on disk: gone.md"],
@@ -61,23 +61,23 @@ class DriveMapTests(unittest.TestCase):
 
     def test_descriptions_survive_regeneration(self) -> None:
         (self.run / "notes").mkdir()
-        (self.run / "notes" / "a.md").write_text("x")
+        (self.run / "notes" / "a.md").write_text("x", encoding="utf-8")
         drive_map.write(self.run)
         map_path = self.run / "DRIVE_MAP.md"
-        map_path.write_text(map_path.read_text().replace("- `notes/a.md`", "- `notes/a.md` — why we chose A"))
-        (self.run / "notes" / "b.md").write_text("x")
+        map_path.write_text(map_path.read_text(encoding="utf-8").replace("- `notes/a.md`", "- `notes/a.md` — why we chose A"), encoding="utf-8")
+        (self.run / "notes" / "b.md").write_text("x", encoding="utf-8")
         drive_map.write(self.run)
-        self.assertIn("- `notes/a.md` — why we chose A", map_path.read_text())
+        self.assertIn("- `notes/a.md` — why we chose A", map_path.read_text(encoding="utf-8"))
         self.assertEqual(drive_map.check(self.run), [])
 
     def test_strays_are_reported_and_ignored_names_are_not_walked(self) -> None:
-        (self.run / "loose.md").write_text("x")
+        (self.run / "loose.md").write_text("x", encoding="utf-8")
         (self.run / "m4-loop").mkdir()
-        (self.run / "m4-loop" / "x.md").write_text("x")
+        (self.run / "m4-loop" / "x.md").write_text("x", encoding="utf-8")
         (self.run / "__pycache__").mkdir()
-        (self.run / "__pycache__" / "x.pyc").write_text("x")
+        (self.run / "__pycache__" / "x.pyc").write_text("x", encoding="utf-8")
         self.assertEqual(drive_map.write(self.run), ["loose.md", "m4-loop/"])
-        text = (self.run / "DRIVE_MAP.md").read_text()
+        text = (self.run / "DRIVE_MAP.md").read_text(encoding="utf-8")
         self.assertIn("## Outside the schema (2)", text)
         self.assertNotIn("__pycache__", text)
 
@@ -85,16 +85,16 @@ class DriveMapTests(unittest.TestCase):
         archive = self.run / "notes" / "upstream"
         archive.mkdir(parents=True)
         for i in range(drive_map.COLLAPSE_OVER + 1):
-            (archive / f"f{i:03}.txt").write_text("x")
+            (archive / f"f{i:03}.txt").write_text("x", encoding="utf-8")
         drive_map.write(self.run)
         map_path = self.run / "DRIVE_MAP.md"
-        self.assertIn(f"- `notes/upstream/` — ({drive_map.COLLAPSE_OVER + 1} files, not listed)", map_path.read_text())
-        self.assertNotIn("f000.txt", map_path.read_text())
-        (archive / "one-more.txt").write_text("x")
+        self.assertIn(f"- `notes/upstream/` — ({drive_map.COLLAPSE_OVER + 1} files, not listed)", map_path.read_text(encoding="utf-8"))
+        self.assertNotIn("f000.txt", map_path.read_text(encoding="utf-8"))
+        (archive / "one-more.txt").write_text("x", encoding="utf-8")
         self.assertNotEqual(drive_map.check(self.run), [])
         drive_map.write(self.run)  # the old count must not be kept as if it were a description
-        self.assertIn(f"({drive_map.COLLAPSE_OVER + 2} files, not listed)", map_path.read_text())
-        self.assertNotIn(f"({drive_map.COLLAPSE_OVER + 1} files", map_path.read_text())
+        self.assertIn(f"({drive_map.COLLAPSE_OVER + 2} files, not listed)", map_path.read_text(encoding="utf-8"))
+        self.assertNotIn(f"({drive_map.COLLAPSE_OVER + 1} files", map_path.read_text(encoding="utf-8"))
 
 
 
@@ -105,7 +105,7 @@ class EngineWiringTests(unittest.TestCase):
         self._tmp = tempfile.TemporaryDirectory()
         ws = Path(self._tmp.name)
         ask = ws / "ask.md"
-        ask.write_text("ask")
+        ask.write_text("ask", encoding="utf-8")
         self.assertEqual(loop_state.main(["init", "--goal", "g", "--input", str(ask), "--workspace", str(ws)]), 0)
         self.run = ws / "g"
         self.state = str(self.run / "loop.state.json")
@@ -126,14 +126,14 @@ class EngineWiringTests(unittest.TestCase):
         self.assertEqual(drive_map.check(self.run), [])
 
     def test_set_node_and_gate_pass_each_refresh_the_map(self) -> None:
-        (self.run / "notes" / "one.md").write_text("x")
+        (self.run / "notes" / "one.md").write_text("x", encoding="utf-8")
         self.assertNotEqual(drive_map.check(self.run), [])
         self.assertEqual(loop_state.main(["set-node", self.state, "--node", "understanding"]), 0)
         self.assertEqual(drive_map.check(self.run), [])
 
         artifact = self.run / "01_understand" / "Problem.md"
         artifact.parent.mkdir()
-        artifact.write_text("p")
+        artifact.write_text("p", encoding="utf-8")
         self.assertEqual(self._gate(str(artifact)), 0)
         self.assertEqual(drive_map.check(self.run), [])
         self.assertEqual(loop_state.check_frozen(loop_state.LoopState.load(self.state)), [])
@@ -144,7 +144,7 @@ class EngineWiringTests(unittest.TestCase):
     def test_cli_check_exit_codes(self) -> None:
         cli = [sys.executable, str(BIN_DIR / "drive_map.py")]
         self.assertEqual(subprocess.run([*cli, "check", str(self.run)], capture_output=True).returncode, 0)
-        (self.run / "misc" / "x.md").write_text("x")
+        (self.run / "misc" / "x.md").write_text("x", encoding="utf-8")
         self.assertEqual(subprocess.run([*cli, "check", str(self.run)], capture_output=True).returncode, 1)
 
 

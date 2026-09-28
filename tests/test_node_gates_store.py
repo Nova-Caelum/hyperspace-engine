@@ -32,7 +32,7 @@ PROJECT = "demo-project"
 
 def _workplan(tmp_path: Path, external_id: str) -> Path:
     path = tmp_path / "workplan.json"
-    path.write_text(json.dumps({"project": PROJECT, "work_items": [{"external_id": external_id}]}))
+    path.write_text(json.dumps({"project": PROJECT, "work_items": [{"external_id": external_id}]}), encoding="utf-8")
     return path
 
 

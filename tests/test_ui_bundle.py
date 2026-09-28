@@ -33,28 +33,28 @@ MOCK_SENTINEL = "Foundry calibration"
 
 
 def _index_html() -> str:
-    return (DIST / "index.html").read_text()
+    return (DIST / "index.html").read_text(encoding="utf-8")
 
 
 def _all_built_js_text() -> str:
     assets = DIST / "assets"
     chunks = []
     for js_file in assets.glob("*.js"):
-        chunks.append(js_file.read_text(errors="replace"))
+        chunks.append(js_file.read_text(errors="replace", encoding="utf-8"))
     return "\n".join(chunks)
 
 
 def test_dist_index_html_references_js_and_css_assets():
     index_html = DIST / "index.html"
     assert index_html.exists(), "ui/dist/index.html must exist (built bundle)"
-    html = index_html.read_text()
+    html = index_html.read_text(encoding="utf-8")
     assert re.search(r'assets/[^"\']+\.js', html), "index.html must reference at least one assets/*.js"
     assert re.search(r'assets/[^"\']+\.css', html), "index.html must reference at least one assets/*.css"
 
 
 def test_source_md_names_pin_command_and_size():
     assert SOURCE_MD.exists(), "ui/SOURCE.md must exist"
-    text = SOURCE_MD.read_text()
+    text = SOURCE_MD.read_text(encoding="utf-8")
     assert PINNED_COMMIT in text, "ui/SOURCE.md must name the pinned commit"
     assert "npm run build" in text, "ui/SOURCE.md must record the build command"
     assert re.search(r"\d+(\.\d+)?\s*[KMG](i?B)?", text), "ui/SOURCE.md must record a bundle size"
@@ -62,9 +62,15 @@ def test_source_md_names_pin_command_and_size():
 
 def test_build_sh_executable_and_syntax_clean():
     assert BUILD_SH.exists(), "ui/build.sh must exist"
-    mode = BUILD_SH.stat().st_mode
-    assert mode & stat.S_IXUSR, "ui/build.sh must be executable"
-    proc = subprocess.run(["sh", "-n", str(BUILD_SH)], capture_output=True, text=True)
+    # The mode git records and every clone reproduces — read from the index,
+    # since NTFS has no POSIX execute bit for `stat` to report.
+    index = subprocess.run(["git", "-C", str(ROOT), "ls-files", "-s", "--", "ui/build.sh"],
+                           capture_output=True, encoding="utf-8")
+    if index.returncode == 0 and index.stdout.strip():
+        assert index.stdout.startswith("100755 "), "ui/build.sh must be executable (git mode 100755)"
+    else:
+        assert BUILD_SH.stat().st_mode & stat.S_IXUSR, "ui/build.sh must be executable"
+    proc = subprocess.run(["sh", "-n", str(BUILD_SH)], capture_output=True, encoding="utf-8", errors="replace")
     assert proc.returncode == 0, f"ui/build.sh must be sh -n clean: {proc.stderr}"
 
 
@@ -95,7 +101,7 @@ def test_mock_sentinel_absent_or_documented():
     # Sentinel present as unreachable dead code (see module docstring finding) —
     # acceptable ONLY if recorded in ui/SOURCE.md so the trade-off is not silent.
     assert SOURCE_MD.exists(), "mock sentinel present in bundle but ui/SOURCE.md missing to record it"
-    source_text = SOURCE_MD.read_text()
+    source_text = SOURCE_MD.read_text(encoding="utf-8")
     assert "FOUNDRY_DEMO_PROJECT" in source_text or "dead code" in source_text.lower(), (
         "mock sentinel string is present in the built JS as apparent dead code; "
         "ui/SOURCE.md must record this finding"

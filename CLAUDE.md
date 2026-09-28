@@ -19,7 +19,7 @@ Code is truth. Skills own procedure. Docs own the machine.
 | Path | What it is |
 |---|---|
 | `bin/` | The engine: run state (`loop_state.py`), gates (`node_gates.py`), endings (`loop_terminal.py`), run-folder map, plan lint, contract pre-check, MCP launcher |
-| `hooks/` | The `SessionStart` hook (`hooks.json` + `session-start.sh`): primes `acing-hyperspace`, prints active-run status, bumps budget counters, surfaces recent worklog |
+| `hooks/` | The `SessionStart` hook (`hooks.json` + `session-start.sh` + `session_start.py`): primes `acing-hyperspace`, prints active-run status, bumps budget counters, surfaces recent worklog |
 | `skills/` | Six loop skills and `hyperspace-setup` |
 | `hyperspace/` | The runtime package: contracts, store, graph tools, verifier graph, judges, MCP server, loopback door, setup, CLI |
 | `ui/` | The prebuilt console; `ui/SOURCE.md` pins the source commit |
@@ -51,9 +51,9 @@ The full component map is `docs/03_architecture.md`; what differs from the sourc
 ## Running things
 
 ```bash
-uv venv .venv && uv pip install --python .venv/bin/python -e ".[dev]"
-.venv/bin/python -m pytest tests/ -q
-.venv/bin/python docs/reference/generate.py --check
+uv venv && uv pip install -e ".[dev]"
+uv run python -m pytest tests/ -q
+uv run python docs/reference/generate.py --check
 claude plugin validate --strict .
 ```
 

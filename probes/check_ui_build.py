@@ -91,7 +91,7 @@ def check_files(evidence: dict) -> bool:
     index_html = DIST / "index.html"
     assets_dir = DIST / "assets"
     assets = list(assets_dir.glob("*")) if assets_dir.exists() else []
-    source_text = SOURCE_MD.read_text() if SOURCE_MD.exists() else ""
+    source_text = SOURCE_MD.read_text(encoding="utf-8") if SOURCE_MD.exists() else ""
 
     details = {
         "index_html_exists": index_html.exists(),
@@ -131,7 +131,7 @@ def check_reproducible(evidence: dict, source: str | None) -> bool:
         if source:
             cmd += ["--source", source]
         cmd += ["--commit", PINNED_COMMIT, "--out", str(out_dir)]
-        proc = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT)
+        proc = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace", cwd=ROOT)
         build_evidence = {
             "command": " ".join(cmd),
             "exit_code": proc.returncode,
@@ -283,7 +283,7 @@ def check_page(evidence: dict, door: str | None, source: str | None = None) -> b
             proc = subprocess.run(
                 [node, str(ROOT / "probes" / "ui_page_check.mjs"), url, SEED_PROJECT["name"], SEED_WORK_ITEM["name"]],
                 capture_output=True,
-                text=True,
+                encoding="utf-8", errors="replace",
                 env={**os.environ, "PLAYWRIGHT_MODULE": str(playwright_module)},
                 timeout=120,
             )

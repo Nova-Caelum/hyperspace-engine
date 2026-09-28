@@ -31,8 +31,9 @@ PROBES = [
     "judge_modes", "pydantic_graph", "installer", "no_vault_refs",
     "gear_names", "known_defects",
 ]
-# T5.3's two probes — accepted names, never part of `all` (see module docstring).
-EXTRA_PROBES = ["whole_path", "consumable"]
+# T5.3's two probes plus v0.1.3's `claude_runtime` — accepted names, never
+# part of `all` (see module docstring): each needs the `claude` CLI on PATH.
+EXTRA_PROBES = ["whole_path", "consumable", "claude_runtime"]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -95,7 +96,14 @@ def main(argv: list[str] | None = None) -> int:
     all_pass = True
     for name in names:
         module = importlib.import_module(f"probes.probe_{name}")
-        ok = bool(module.run(out_dir, opts))
+        try:
+            ok = bool(module.run(out_dir, opts))
+        except Exception as exc:  # noqa: BLE001 — one crashing probe must not silence the rest
+            from probes._verdict import write_verdict
+
+            write_verdict(out_dir / f"{name}.json", probe=name, result="FAIL",
+                          evidence={"crashed": f"{type(exc).__name__}: {exc}"})
+            ok = False
         if not ok:
             all_pass = False
         print(f"{name}: {'PASS' if ok else 'FAIL'} {out_dir / f'{name}.json'}")

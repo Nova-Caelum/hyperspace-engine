@@ -27,7 +27,10 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _hyperspace_bin() -> Path:
-    return Path(sys.executable).parent / "hyperspace"
+    """The console script beside the running interpreter — `hyperspace` on
+    POSIX, `hyperspace.exe` in a Windows venv's `Scripts/`."""
+    name = "hyperspace.exe" if sys.platform == "win32" else "hyperspace"
+    return Path(sys.executable).parent / name
 
 
 def _venv_python() -> Path:
@@ -38,14 +41,14 @@ def _venv_python() -> Path:
 def _run_module(args: list[str]) -> subprocess.CompletedProcess:
     return subprocess.run(
         [str(_venv_python()), "-m", "hyperspace.cli", *args],
-        capture_output=True, text=True, cwd=REPO_ROOT,
+        capture_output=True, encoding="utf-8", errors="replace", cwd=REPO_ROOT,
     )
 
 
 def _run_bin(args: list[str]) -> subprocess.CompletedProcess:
     return subprocess.run(
         [str(_hyperspace_bin()), *args],
-        capture_output=True, text=True, cwd=REPO_ROOT,
+        capture_output=True, encoding="utf-8", errors="replace", cwd=REPO_ROOT,
     )
 
 

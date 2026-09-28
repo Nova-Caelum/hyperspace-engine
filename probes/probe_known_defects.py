@@ -24,7 +24,7 @@ def run(out_dir, opts) -> bool:
     python = venv_python if venv_python.exists() else Path(sys.executable)
     proc = subprocess.run(
         [str(python), "-m", "pytest", "tests/test_known_defects.py", "-q"],
-        cwd=ROOT, capture_output=True, text=True,
+        cwd=ROOT, capture_output=True, encoding="utf-8", errors="replace",
     )
     lines = [ln for ln in proc.stdout.splitlines() if ln.strip()]
     ok = proc.returncode == 0
