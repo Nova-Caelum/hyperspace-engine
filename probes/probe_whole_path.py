@@ -3,7 +3,7 @@
 
 Proves the entire product path in one run: install from a marketplace into a
 FRESH `CLAUDE_CONFIG_DIR` holding no Nova Caelum credential, provision the
-isolated env, start the plugin's own MCP launcher, drive one goal through the
+isolated env, start the MCP server as the plugin's own `.mcp.json` does, drive one goal through the
 loop in a real Claude Code session, close the filed item through the
 verifier, and read the same item back as `done` from the loopback door.
 
@@ -24,11 +24,12 @@ output (brief step 3):
      provisioning fidelity to "the marketplace-copied tree" is that row's
      already-accepted scope, not reinvented here), `judge="none"` explicit
      (deterministic — no auto-probe needed for this row's assertion).
-  4. mcp_tools — start the plugin's OWN launcher (`sh <installed
-     root>/bin/hyperspace-mcp`, found by globbing `plugins/**/bin/
-     hyperspace-mcp` under CLAUDE_CONFIG_DIR — never a hardcoded
-     marketplace/version path, since both can differ under --source github or
-     a version bump) over stdio with CLAUDE_PROJECT_DIR=P; `tools/list`.
+  4. mcp_tools — start the server exactly as the INSTALLED plugin's own
+     `.mcp.json` says (found by globbing `plugins/**/.mcp.json` under
+     CLAUDE_CONFIG_DIR — never a hardcoded marketplace/version path, since
+     both can differ under --source github or a version bump; substituted and
+     spawned with no shell by `probes/_mcp_launch.py`) over stdio with
+     CLAUDE_PROJECT_DIR=P; `tools/list`.
   5. session — `claude -p <prompt> --output-format json` (real, unless
      `opts.session_runner` is injected, or skipped under `opts.stop_before ==
      "session"`) with cwd P, CLAUDE_CONFIG_DIR set, no host reachable but the
@@ -66,6 +67,7 @@ import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _mcp_launch import mcp_launch  # noqa: E402
 from _verdict import write_verdict  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -189,7 +191,7 @@ def _run_claude(args: list[str], *, cwd: Path, env: dict, timeout: int = 120) ->
     if claude is None:
         return {"command": "claude " + " ".join(args), "error": "`claude` not found on PATH"}
     proc = subprocess.run(
-        [claude, *args], cwd=cwd, env=env, capture_output=True, text=True, timeout=timeout,
+        [claude, *args], cwd=cwd, env=env, capture_output=True, encoding="utf-8", errors="replace", timeout=timeout,
     )
     return {
         "command": "claude " + " ".join(args),
@@ -250,7 +252,9 @@ def _step_provision(project_dir: Path, port: int) -> tuple[bool, dict]:
         project_dir, judge="none", port=port, user="user", prefer_uv=True, platform=sys.platform,
     )
 
-    env_dir_ok = (project_dir / ".hyperspace" / "env" / "bin" / "python").is_file()
+    from hyperspace.venv_paths import native_python
+
+    env_dir_ok = native_python(project_dir / ".hyperspace" / "env").is_file()
     db_ok = (project_dir / ".hyperspace" / "graph.db").is_file()
 
     from hyperspace.config import load_config
@@ -276,21 +280,38 @@ def _step_provision(project_dir: Path, port: int) -> tuple[bool, dict]:
     return ok, evidence
 
 
-# ── step 4: mcp_tools, via the plugin's OWN launcher ────────────────────
+# ── step 4: mcp_tools, via the installed plugin's OWN .mcp.json ─────────
 
 
-def _find_installed_launcher(config_dir: Path) -> Path | None:
-    matches = sorted((config_dir / "plugins").glob("**/bin/hyperspace-mcp"))
-    return matches[0] if matches else None
+def _find_installed_plugin_root(config_dir: Path) -> Path | None:
+    """The installed copy of THIS plugin: the directory holding a
+    `.mcp.json` that registers the `hyperspace` server."""
+    for manifest in sorted((config_dir / "plugins").glob("**/.mcp.json")):
+        try:
+            servers = json.loads(manifest.read_text(encoding="utf-8")).get("mcpServers", {})
+        except (OSError, ValueError):
+            continue
+        if "hyperspace" in servers:
+            return manifest.parent
+    return None
 
 
-async def _list_tools_via_launcher(launcher: Path, project_dir: Path) -> dict:
+def installed_mcp_params(config_dir: Path, project_dir: Path):
+    """`StdioServerParameters` for the installed plugin's own `.mcp.json`
+    entry, or `None` when no installed copy is found."""
     from mcp import StdioServerParameters
+
+    plugin_root = _find_installed_plugin_root(config_dir)
+    if plugin_root is None:
+        return None
+    command, args = mcp_launch(plugin_root, project_dir)
+    env = {**os.environ, "CLAUDE_PROJECT_DIR": str(project_dir)}
+    return StdioServerParameters(command=command, args=args, env=env)
+
+
+async def _list_tools_via_mcp_json(params) -> dict:
     from mcp.client.session import ClientSession
     from mcp.client.stdio import stdio_client
-
-    env = {**os.environ, "CLAUDE_PROJECT_DIR": str(project_dir)}
-    params = StdioServerParameters(command="sh", args=[str(launcher)], env=env)
 
     async with stdio_client(params) as (read, write):
         async with ClientSession(read, write) as session:
@@ -302,19 +323,20 @@ async def _list_tools_via_launcher(launcher: Path, project_dir: Path) -> dict:
 def _step_mcp_tools(config_dir: Path, project_dir: Path) -> tuple[bool, dict]:
     import asyncio
 
-    launcher = _find_installed_launcher(config_dir)
-    if launcher is None:
-        return False, {"error": "no installed bin/hyperspace-mcp found under CLAUDE_CONFIG_DIR/plugins"}
+    params = installed_mcp_params(config_dir, project_dir)
+    if params is None:
+        return False, {"error": "no installed .mcp.json registering `hyperspace` under CLAUDE_CONFIG_DIR/plugins"}
+    launch = {"command": params.command, "args": params.args}
 
     try:
-        result = asyncio.run(_list_tools_via_launcher(launcher, project_dir))
+        result = asyncio.run(_list_tools_via_mcp_json(params))
     except Exception as exc:  # noqa: BLE001 — recorded, never swallowed
-        return False, {"launcher_path": str(launcher), "error": f"{type(exc).__name__}: {exc}"}
+        return False, {"launch": launch, "error": f"{type(exc).__name__}: {exc}"}
 
     names = result["tool_names"]
     missing = [n for n in REQUIRED_MCP_TOOLS if n not in names]
     ok = not missing
-    return ok, {"launcher_path": str(launcher), "tool_names": names, "missing_required": missing}
+    return ok, {"launch": launch, "tool_names": names, "missing_required": missing}
 
 
 # ── step 5: session ──────────────────────────────────────────────────────
@@ -326,7 +348,7 @@ def _default_session_runner(prompt: str, *, cwd: Path, env: dict, timeout: int):
         raise FileNotFoundError("`claude` not found on PATH")
     return subprocess.run(
         [claude, "-p", prompt, "--output-format", "json", "--allowedTools", ALLOWED_TOOLS],
-        cwd=cwd, env=env, capture_output=True, text=True, timeout=timeout,
+        cwd=cwd, env=env, capture_output=True, encoding="utf-8", errors="replace", timeout=timeout,
     )
 
 
@@ -448,15 +470,18 @@ def _read_marker(project_dir: Path) -> dict:
 
 
 def _sample_no_nova_infra_connections() -> dict:
-    pgrep = subprocess.run(["pgrep", "-f", "hyperspace"], capture_output=True, text=True)
-    pids = [p for p in pgrep.stdout.split() if p.strip()]
-    lsof_present = shutil.which("lsof") is not None
+    # `pgrep`/`lsof` are POSIX tools; without them this is disclosed, not run.
+    lsof_present = shutil.which("lsof") is not None and shutil.which("pgrep") is not None
+    pids: list[str] = []
+    if lsof_present:
+        pgrep = subprocess.run(["pgrep", "-f", "hyperspace"], capture_output=True, encoding="utf-8", errors="replace")
+        pids = [p for p in pgrep.stdout.split() if p.strip()]
     samples: list[str] = []
     if lsof_present:
         for pid in pids:
             try:
                 lsof = subprocess.run(
-                    ["lsof", "-nP", "-a", "-iTCP", "-p", pid], capture_output=True, text=True, timeout=5,
+                    ["lsof", "-nP", "-a", "-iTCP", "-p", pid], capture_output=True, encoding="utf-8", errors="replace", timeout=5,
                 )
                 samples.extend(ln.strip() for ln in lsof.stdout.splitlines()[1:] if ln.strip())
             except subprocess.TimeoutExpired:

@@ -55,14 +55,14 @@ def test_load_config_reads_all_four_fields(tmp_path):
     (tmp_path / ".hyperspace").mkdir()
     (tmp_path / ".hyperspace" / "config.toml").write_text(
         'judge = "codex"\nmodel = "gpt-codex-5"\nport = 9000\nuser = "alice"\n'
-    )
+    , encoding="utf-8")
     cfg = load_config(tmp_path)
     assert (cfg.judge, cfg.model, cfg.port, cfg.user) == ("codex", "gpt-codex-5", 9000, "alice")
 
 
 def test_load_config_refuses_unknown_judge_naming_the_five(tmp_path):
     (tmp_path / ".hyperspace").mkdir()
-    (tmp_path / ".hyperspace" / "config.toml").write_text('judge = "bogus"\n')
+    (tmp_path / ".hyperspace" / "config.toml").write_text('judge = "bogus"\n', encoding="utf-8")
     with pytest.raises(ValueError) as exc:
         load_config(tmp_path)
     message = str(exc.value)
@@ -225,17 +225,32 @@ def test_cli_judge_argv_and_parses_valid_json(kind):
 
     argv = captured["argv"]
     if kind == "claude-code":
-        assert argv[0] == "claude"
+        # argv[0] is what `which` resolved, never the bare name: on Windows an
+        # npm-installed CLI is a `.cmd` shim that CreateProcess cannot find by
+        # bare name (v0.1.3).
+        assert argv[0] == "/usr/local/bin/claude"
         assert argv[1] == "-p"
         assert isinstance(argv[2], str) and "task statement" in argv[2]
         assert "--output-format" in argv and argv[argv.index("--output-format") + 1] == "json"
         assert "--system-prompt" in argv
         assert "--json-schema" in argv
     else:
-        assert argv[0:2] == ["codex", "exec"]
+        assert argv[0:2] == ["/usr/local/bin/codex", "exec"]
         assert "--output-schema" in argv
         assert "--output-last-message" in argv
         assert isinstance(argv[-1], str) and "task statement" in argv[-1]
+
+
+@pytest.mark.parametrize("kind", ["claude-code", "codex"])
+def test_cli_judge_runs_the_resolved_windows_shim_path(kind):
+    """An npm-installed CLI on Windows is `<name>.cmd`; `which` finds it via
+    PATHEXT, and that resolved path — not the bare name — is what runs."""
+    binary = "claude" if kind == "claude-code" else "codex"
+    shim = f"C:/Users/u/AppData/Roaming/npm/{binary}.cmd"
+    captured: dict = {}
+    runner = CliJudge(kind, run=_fake_run_ok(kind, _VALID_CQ_PAYLOAD, captured), which=lambda b: shim)
+    asyncio.run(runner.judge_criteria("task statement", [_criterion()]))
+    assert captured["argv"][0] == shim
 
 
 @pytest.mark.parametrize("kind", ["claude-code", "codex"])
@@ -296,7 +311,7 @@ def _git(root: Path, *args: str, date: str | None = None) -> None:
     env = {**os.environ, "GIT_AUTHOR_DATE": date, "GIT_COMMITTER_DATE": date} if date else None
     subprocess.run(
         ["git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", *args],
-        cwd=root, check=True, capture_output=True, text=True, env=env,
+        cwd=root, check=True, capture_output=True, encoding="utf-8", errors="replace", env=env,
     )
 
 
@@ -324,8 +339,8 @@ def project(tmp_path):
 
     root = tmp_path / "proj"
     root.mkdir()
-    (root / ".gitignore").write_text(".hyperspace/\n")
-    (root / "README.md").write_text("demo\n")
+    (root / ".gitignore").write_text(".hyperspace/\n", encoding="utf-8")
+    (root / "README.md").write_text("demo\n", encoding="utf-8")
     _git(root, "init", "-q")
     _git(root, "add", ".")
     _git(root, "commit", "-q", "-m", "init", date=_ago(120))
@@ -367,7 +382,7 @@ def test_raising_judge_makes_graph_unverifiable_with_criteria_uncertain(project)
     root, store = project
     _file_row(store, f"{PROJECT}:g")
     (root / "out").mkdir(parents=True, exist_ok=True)
-    (root / "out" / "result.txt").write_text("result\n")
+    (root / "out" / "result.txt").write_text("result\n", encoding="utf-8")
 
     judge = _RaisingJudge("openrouter")
     deps = local_deps(store, judge, project_root=root)

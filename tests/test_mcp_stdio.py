@@ -72,7 +72,7 @@ def _init_project(tmp_path: Path, name: str, port: int) -> Path:
     db_path = project_dir / ".hyperspace" / "graph.db"
     store = Store.init(db_path)
     store.close()
-    (project_dir / ".hyperspace" / "config.toml").write_text(f"port = {port}\n")
+    (project_dir / ".hyperspace" / "config.toml").write_text(f"port = {port}\n", encoding="utf-8")
     return project_dir
 
 
@@ -212,7 +212,7 @@ def test_stdio_server_lists_and_calls_all_tools_and_starts_door(tmp_path):
 
                 # ── create the result file, THEN close via complete_workitem ──
                 (project_dir / "out").mkdir(parents=True, exist_ok=True)
-                (project_dir / "out" / "result.txt").write_text("result\n")
+                (project_dir / "out" / "result.txt").write_text("result\n", encoding="utf-8")
 
                 closed = await session.call_tool("complete_workitem", {
                     "project": PROJECT, "external_id": ext1,
@@ -283,5 +283,5 @@ def test_mcp_uses_the_configured_judge(tmp_path):
     project = tmp_path / "proj"
     Store.init(project / ".hyperspace" / "graph.db")
     assert _judge_for(project).name == "none"  # nothing configured → none
-    (project / ".hyperspace" / "config.toml").write_text('judge = "claude-code"\n')
+    (project / ".hyperspace" / "config.toml").write_text('judge = "claude-code"\n', encoding="utf-8")
     assert _judge_for(project).name == "claude-code"

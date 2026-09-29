@@ -1,6 +1,8 @@
-"""`python3 -m hyperspace.setup` — the bootstrap entrypoint the setup skill's
-step 2 runs BEFORE `.hyperspace/env` exists, when the plugin's PyPI
-dependencies (pydantic, etc.) are not installed anywhere yet.
+"""`python -m hyperspace.setup` — the bootstrap entrypoint that runs BEFORE
+`.hyperspace/env` exists, when the plugin's PyPI dependencies (pydantic, etc.)
+are not installed anywhere yet. The setup skill reaches it through
+`bin/hyperspace_setup.py`, which puts the plugin root on `sys.path` itself so
+the command needs no `PYTHONPATH=` prefix (sh-only syntax) on any OS.
 
 `hyperspace.cli` (and everything it imports — `hyperspace.http`,
 `hyperspace.tools`, `hyperspace.contracts`) needs those dependencies at
@@ -23,15 +25,17 @@ import argparse
 import sys
 from pathlib import Path
 
+from .._stdio import utf8_stdio
 from ..config import JUDGES
 from ..store import Store
 from .provision import provision_and_report
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, prog: str = "python -m hyperspace.setup") -> int:
+    utf8_stdio()
     argv = sys.argv[1:] if argv is None else list(argv)
 
-    parser = argparse.ArgumentParser(prog="python3 -m hyperspace.setup")
+    parser = argparse.ArgumentParser(prog=prog)
     parser.add_argument("--dir", default=".")
     parser.add_argument("--provision", action="store_true")
     parser.add_argument("--judge", default=None, choices=list(JUDGES))

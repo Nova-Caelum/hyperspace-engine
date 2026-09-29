@@ -70,7 +70,7 @@ def test_s1_no_measured_or_detected_keys_in_state_file(tmp_path):
     proc = subprocess.run(
         [str(_venv_python()), str(ROOT / "bin" / "loop_state.py"), "init",
          "--goal", "known-defects-probe", "--input", str(source), "--workspace", str(tmp_path)],
-        capture_output=True, text=True,
+        capture_output=True, encoding="utf-8", errors="replace",
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr
 

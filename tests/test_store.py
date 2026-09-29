@@ -48,7 +48,10 @@ WORK_ITEM_TYPE_OVERLAP_FIELDS = {
 
 
 def _hyperspace_bin() -> Path:
-    return Path(sys.executable).parent / "hyperspace"
+    """The console script beside the running interpreter — `hyperspace` on
+    POSIX, `hyperspace.exe` in a Windows venv's `Scripts/`."""
+    name = "hyperspace.exe" if sys.platform == "win32" else "hyperspace"
+    return Path(sys.executable).parent / name
 
 
 # ── (a) init creates the file + eleven tables ───────────────────────────────
@@ -388,7 +391,7 @@ def test_hyperspace_init_subprocess_creates_db_and_is_idempotent(tmp_path):
 
     first = subprocess.run(
         [str(hyperspace_bin), "init", "--dir", str(project_dir)],
-        capture_output=True, text=True,
+        capture_output=True, encoding="utf-8", errors="replace",
     )
     assert first.returncode == 0, first.stderr
     db_path = project_dir / ".hyperspace" / "graph.db"
@@ -397,7 +400,7 @@ def test_hyperspace_init_subprocess_creates_db_and_is_idempotent(tmp_path):
 
     second = subprocess.run(
         [str(hyperspace_bin), "init", "--dir", str(project_dir)],
-        capture_output=True, text=True,
+        capture_output=True, encoding="utf-8", errors="replace",
     )
     assert second.returncode == 0, second.stderr
     assert "already initialised" in second.stdout

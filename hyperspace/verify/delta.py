@@ -28,7 +28,10 @@ MAX_CURRENT_CHARS = 60_000
 def _git(repo: Path, *args: str, timeout: int = GIT_TIMEOUT) -> tuple[int, str]:
     try:
         proc = subprocess.run(
-            ["git", "-C", str(repo), *args], capture_output=True, text=True, timeout=timeout,
+            ["git", "-C", str(repo), *args], capture_output=True, timeout=timeout,
+            # git emits file content and paths as UTF-8; never the Windows
+            # ANSI code page a bare `text=True` would decode with.
+            encoding="utf-8", errors="replace",
         )
         return proc.returncode, proc.stdout
     except (OSError, subprocess.TimeoutExpired):
@@ -156,7 +159,9 @@ def path_delta(path: Path, filed_at: datetime, *, repo: Path | None = None,
         return _mtime_delta(path, filed_at, exists_now, claimed_effect=claimed_effect)
 
     try:
-        rel = str(path.relative_to(repo))
+        # Forward slashes: git's `<rev>:<path>` syntax requires them, and a
+        # Windows `relative_to` would hand back backslashes.
+        rel = path.relative_to(repo).as_posix()
     except ValueError:
         return _mtime_delta(path, filed_at, exists_now, claimed_effect=claimed_effect)
 

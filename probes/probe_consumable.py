@@ -78,7 +78,7 @@ def _resolve_source(source: str | None) -> str:
 
 def _check_tag(source: str | None) -> tuple[bool, dict]:
     points_at = subprocess.run(
-        ["git", "tag", "--points-at", "HEAD"], cwd=ROOT, capture_output=True, text=True,
+        ["git", "tag", "--points-at", "HEAD"], cwd=ROOT, capture_output=True, encoding="utf-8", errors="replace",
     )
     tags = [t for t in points_at.stdout.splitlines() if t.strip()]
     # Claude Code resolves a versioned dependency against `{plugin}--v<semver>`
@@ -96,7 +96,7 @@ def _check_tag(source: str | None) -> tuple[bool, dict]:
         return False, {"present": False, "points_at_head": tags, "reason": "no hyperspace-engine--v<semver> tag on HEAD (claude plugin tag convention)"}
 
     ls_remote = subprocess.run(
-        ["git", "ls-remote", "--tags", "origin"], cwd=ROOT, capture_output=True, text=True,
+        ["git", "ls-remote", "--tags", "origin"], cwd=ROOT, capture_output=True, encoding="utf-8", errors="replace",
     )
     pushed = any(f"refs/tags/{semver_tags[0]}" in line for line in ls_remote.stdout.splitlines())
     return bool(pushed), {
@@ -136,7 +136,7 @@ def _run_claude(args: list[str], *, cwd: Path, env: dict, timeout: int = 120) ->
     claude = shutil.which("claude")
     if claude is None:
         return {"command": "claude " + " ".join(args), "error": "`claude` not found on PATH"}
-    proc = subprocess.run([claude, *args], cwd=cwd, env=env, capture_output=True, text=True, timeout=timeout)
+    proc = subprocess.run([claude, *args], cwd=cwd, env=env, capture_output=True, encoding="utf-8", errors="replace", timeout=timeout)
     return {
         "command": "claude " + " ".join(args),
         "exit_code": proc.returncode,

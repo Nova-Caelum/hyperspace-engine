@@ -2,13 +2,20 @@
 """T5.1 verdict check: a fresh-directory, non-interactive dry run of the
 hyperspace-setup skill's steps — no key, no `claude`/`codex` on PATH.
 
-Six sub-checks, all must PASS:
+Sub-checks, all must PASS:
   (a) the real provisioning (`hyperspace.setup.provision.provision`) with the
-      real `uv` on this Mac creates `.hyperspace/env`
+      real `uv` creates `.hyperspace/env` — the venv's own interpreter, and
+      `.hyperspace/env/bin/python` (the spelling `.mcp.json` runs) reaching it
+      on every OS (a junction on Windows)
   (b) `.hyperspace/graph.db` exists (`hyperspace init`'s store step)
   (c) `.hyperspace/config.toml` reads `judge = "none"` and the run captured
       the fallback message that names what was missing
-  (d) the launcher for this platform exists and is executable (POSIX)
+  (d) the launcher for this platform exists (executable on POSIX), and
+      RUNNING it — `cmd /c "Open Hyperspace.bat"` on Windows, `sh <launcher>`
+      elsewhere — serves the console on the configured port and opens the
+      browser at it (a recording fake browser via `BROWSER`); on Windows the
+      same `.bat` in a project with no environment refuses (exit 1) naming
+      the `hyperspace-setup` skill
   (e) the door starts on a free port and answers `GET /api/projects`, then
       `hyperspace doctor` re-runs the check phase and exits 0
   (f) the running interpreter's own site-packages (`sys.executable -m pip
@@ -32,6 +39,7 @@ import argparse
 import json
 import os
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -41,6 +49,7 @@ import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _proc import stop_tree  # noqa: E402
 from _verdict import write_verdict  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -50,9 +59,14 @@ from hyperspace.config import load_config  # noqa: E402
 from hyperspace.http.server import start  # noqa: E402
 from hyperspace.setup.provision import doctor, provision  # noqa: E402
 from hyperspace.store import Store  # noqa: E402
+from hyperspace.venv_paths import native_python, portable_python  # noqa: E402
 
-_HIDDEN_BINARIES = ("claude", "codex")
-_SYSTEM_DIRS = ["/usr/bin", "/bin", "/usr/sbin", "/sbin", "/usr/local/bin"]
+IS_WINDOWS = sys.platform == "win32"
+_HIDDEN_BINARIES = ("claude", "codex", "claude.exe", "codex.exe", "claude.cmd", "codex.cmd")
+_SYSTEM_DIRS = (
+    [os.path.join(os.environ.get("SYSTEMROOT", r"C:\Windows"), "System32"), os.environ.get("SYSTEMROOT", r"C:\Windows")]
+    if IS_WINDOWS else ["/usr/bin", "/bin", "/usr/sbin", "/sbin", "/usr/local/bin"]
+)
 
 
 def _trim(text, limit=4000):
@@ -72,10 +86,13 @@ def _build_stripped_path(shim_dir: Path) -> str:
     shim_dir.mkdir(parents=True, exist_ok=True)
     real_uv = shutil.which("uv")
     if real_uv is not None:
-        (shim_dir / "uv").symlink_to(real_uv)
-        real_uvx = Path(real_uv).parent / "uvx"
-        if real_uvx.exists():
-            (shim_dir / "uvx").symlink_to(real_uvx)
+        # Windows: a copy (symlinks need a privilege a Windows user may lack);
+        # uv is a single self-contained executable, so a copy runs the same.
+        place = shutil.copy2 if IS_WINDOWS else (lambda src, dst: Path(dst).symlink_to(src))
+        for name in ("uv", "uvx"):
+            source = Path(real_uv).with_name(name + Path(real_uv).suffix)
+            if source.exists():
+                place(str(source), str(shim_dir / source.name))
 
     safe_system_dirs = [d for d in _SYSTEM_DIRS if Path(d).is_dir() and not _dir_has_any(d, _HIDDEN_BINARIES)]
     return os.pathsep.join([str(shim_dir), *safe_system_dirs])
@@ -87,8 +104,88 @@ def _fresh_env(shim_dir: Path) -> dict:
     return env
 
 
+def _free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
+def _fake_browser(directory: Path) -> tuple[Path, Path]:
+    """A `BROWSER` executable that records the URL it was asked to open and
+    exits 0 — so `serve --open` is observable and no real browser starts.
+    Python's `webbrowser` runs `BROWSER` as `[<executable>, <url>]`."""
+    directory.mkdir(parents=True, exist_ok=True)
+    record = directory / "opened.txt"
+    if IS_WINDOWS:
+        browser = directory / "browser.bat"
+        browser.write_text(f'@echo %~1> "{record}"\r\n@exit /b 0\r\n', encoding="utf-8")
+    else:
+        browser = directory / "browser"
+        browser.write_text(f'#!/bin/sh\nprintf "%s\\n" "$1" > "{record}"\n', encoding="utf-8")
+        browser.chmod(0o755)
+    return browser, record
+
+
+def _launcher_argv(launcher: Path) -> list[str]:
+    """How a double-click runs it: `cmd` for a `.bat`, `sh` for the POSIX ones."""
+    return ["cmd", "/d", "/c", str(launcher)] if launcher.suffix == ".bat" else ["sh", str(launcher)]
+
+
+def _run_launcher(launcher: Path, port: int, env: dict, browser: Path, record: Path) -> dict:
+    """Runs the launcher, waits up to 60 s for the door on `port`, stops it."""
+    proc = subprocess.Popen(
+        _launcher_argv(launcher), env={**env, "BROWSER": str(browser)},
+        stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    )
+    served = False
+    deadline = time.time() + 60
+    try:
+        while time.time() < deadline and proc.poll() is None:
+            try:
+                with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/projects", timeout=2) as resp:
+                    served = resp.status == 200
+                    break
+            except (urllib.error.URLError, OSError):
+                time.sleep(0.5)
+        # `--open` fires right after the bind; give the recorder a moment.
+        for _ in range(20):
+            if record.is_file():
+                break
+            time.sleep(0.25)
+    finally:
+        exited_early = proc.poll()
+        stop_tree(proc)
+    opened = record.read_text(encoding="utf-8", errors="replace").strip() if record.is_file() else ""
+    return {
+        "argv": _launcher_argv(launcher),
+        "served": served,
+        "opened_url": opened,
+        "opened_ok": opened.rstrip("/") == f"http://127.0.0.1:{port}",
+        "exited_before_serving": exited_early,
+    }
+
+
+def _run_launcher_without_env(launcher: Path, tmp_path: Path, env: dict) -> dict:
+    """The Windows `.bat` in a project that was never set up: exit 1 and a
+    message naming the fix, never a hang or a silent failure."""
+    bare = tmp_path / "never set up" / ".hyperspace"
+    bare.mkdir(parents=True)
+    copy = bare / launcher.name
+    shutil.copy2(launcher, copy)
+    proc = subprocess.run(
+        _launcher_argv(copy), env=env, stdin=subprocess.DEVNULL,
+        capture_output=True, encoding="utf-8", errors="replace", timeout=60,
+    )
+    return {
+        "exit_code": proc.returncode,
+        "stdout": _trim(proc.stdout),
+        "refused_ok": proc.returncode == 1 and "hyperspace-setup" in proc.stdout,
+    }
+
+
 def _pip_freeze(python: str) -> str:
-    proc = subprocess.run([python, "-m", "pip", "list", "--format=freeze"], capture_output=True, text=True)
+    proc = subprocess.run([python, "-m", "pip", "list", "--format=freeze"], capture_output=True,
+                          encoding="utf-8", errors="replace")
     return proc.stdout
 
 
@@ -101,7 +198,7 @@ def main(argv=None) -> int:
     started_at = time.time()
     before_freeze = _pip_freeze(sys.executable)
 
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         tmp_path = Path(tmp)
         shim_dir = tmp_path / "shim-bin"
         env = _fresh_env(shim_dir)
@@ -117,7 +214,7 @@ def main(argv=None) -> int:
             "which_codex": which_fn("codex"),
         }
 
-        project_dir = tmp_path / "fresh-project"
+        project_dir = tmp_path / "fresh project"
         project_dir.mkdir()
         db_path = project_dir / ".hyperspace" / "graph.db"
         Store.init(db_path).close()
@@ -127,15 +224,20 @@ def main(argv=None) -> int:
         # --provision`) — the door's LIVE functional check just below binds
         # its own ephemeral `port=0` instead, so this config value is never
         # actually listened on during the probe.
+        port = _free_port()
         provision_result = provision(
             project_dir,
-            judge=None, port=8791, user="user",
+            judge=None, port=port, user="user",
             prefer_uv=True, run=run_fn, which=which_fn, env=env,
             platform=sys.platform,
         )
         evidence["provision"] = provision_result
 
-        env_dir_ok = (project_dir / ".hyperspace" / "env" / "bin" / "python").is_file()
+        env_dir = project_dir / ".hyperspace" / "env"
+        portable = portable_python(env_dir)
+        env_dir_ok = native_python(env_dir).is_file() and (
+            portable.with_name("python.exe").is_file() if IS_WINDOWS else portable.is_file()
+        )
         db_ok = db_path.is_file()
 
         cfg = load_config(project_dir)
@@ -148,9 +250,17 @@ def main(argv=None) -> int:
             "win32": "Open Hyperspace.bat",
         }.get(sys.platform, "open-hyperspace.sh")
         launcher_path = project_dir / ".hyperspace" / launcher_name
-        launcher_ok = launcher_path.is_file() and (
+        launcher_file_ok = launcher_path.is_file() and (
             sys.platform == "win32" or os.access(launcher_path, os.X_OK)
         )
+        browser, record = _fake_browser(tmp_path / "fakebrowser")
+        launcher_run = _run_launcher(launcher_path, port, env, browser, record)
+        evidence["launcher_run"] = launcher_run
+        launcher_ok = launcher_file_ok and launcher_run["served"] and launcher_run["opened_ok"]
+        if IS_WINDOWS:
+            without_env = _run_launcher_without_env(launcher_path, tmp_path, env)
+            evidence["launcher_without_env"] = without_env
+            launcher_ok = launcher_ok and without_env["refused_ok"]
 
         door = None
         api_ok = False

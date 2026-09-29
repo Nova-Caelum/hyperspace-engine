@@ -24,6 +24,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _verdict import write_verdict  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+from hyperspace.venv_paths import find_venv_python  # noqa: E402
 
 ELEVEN_TABLES = {
     "projects", "modules", "work_items", "work_item_relations", "cycles",
@@ -45,7 +48,7 @@ def check_pytest(evidence: dict) -> bool:
         [str(python), "-m", "pytest", "tests/test_store.py", "-q"],
         cwd=ROOT,
         capture_output=True,
-        text=True,
+        encoding="utf-8", errors="replace",
     )
     summary_line = ""
     for line in proc.stdout.splitlines()[::-1]:
@@ -63,8 +66,8 @@ def check_pytest(evidence: dict) -> bool:
 
 
 def check_init_and_tables(evidence: dict) -> bool:
-    venv_python = ROOT / ".venv" / "bin" / "python"
-    hyperspace_bin = (venv_python.parent / "hyperspace") if venv_python.exists() else shutil.which("hyperspace")
+    venv_python = find_venv_python(ROOT / ".venv") or Path(sys.executable)
+    hyperspace_bin = shutil.which("hyperspace", path=str(venv_python.parent)) or shutil.which("hyperspace")
     if hyperspace_bin is None or not Path(hyperspace_bin).exists():
         evidence["init_and_tables"] = {"error": "hyperspace console script not found"}
         return False
@@ -75,7 +78,7 @@ def check_init_and_tables(evidence: dict) -> bool:
         proc = subprocess.run(
             [str(hyperspace_bin), "init", "--dir", str(project_dir)],
             capture_output=True,
-            text=True,
+            encoding="utf-8", errors="replace",
         )
         db_path = project_dir / ".hyperspace" / "graph.db"
         tables: list[str] = []

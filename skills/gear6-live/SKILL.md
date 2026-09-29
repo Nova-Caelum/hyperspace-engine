@@ -64,7 +64,7 @@ This stage exits ONLY through `confirm`, and `confirm` refuses:
 
 There is no `gate-pass --node live`. `live` is a stage you sit in, not a node you exit; no exit check is registered for it and `gate-pass` refuses it outright.
 
-`${CLAUDE_PLUGIN_ROOT}` is the installed plugin's root, which Claude Code substitutes into this skill's text; every command in this skill runs with `.hyperspace/env/bin/python`, the project's isolated environment.
+`${CLAUDE_PLUGIN_ROOT}` is the installed plugin's root, which Claude Code substitutes into this skill's text; every command in this skill runs with `.hyperspace/env/bin/python`, the project's isolated environment — the same spelling on macOS, Linux and Windows, run from the project root.
 
 ## The four stops
 

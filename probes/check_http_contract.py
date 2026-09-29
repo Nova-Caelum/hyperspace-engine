@@ -27,9 +27,13 @@ import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _proc import stop_tree  # noqa: E402
 from _verdict import write_verdict  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+from hyperspace.venv_paths import find_venv_python  # noqa: E402
 
 
 def _trim(text: str | None, limit: int = 4000) -> str:
@@ -39,17 +43,13 @@ def _trim(text: str | None, limit: int = 4000) -> str:
 
 
 def _venv_python() -> Path:
-    venv_python = ROOT / ".venv" / "bin" / "python"
-    return venv_python if venv_python.exists() else Path(sys.executable)
+    return find_venv_python(ROOT / ".venv") or Path(sys.executable)
 
 
 def _hyperspace_bin() -> Path:
     """The console-script entrypoint installed by `uv pip install -e .` —
     same venv the pytest sub-check runs under."""
-    candidate = ROOT / ".venv" / "bin" / "hyperspace"
-    if candidate.exists():
-        return candidate
-    found = shutil.which("hyperspace")
+    found = shutil.which("hyperspace", path=str(_venv_python().parent)) or shutil.which("hyperspace")
     if found:
         return Path(found)
     raise FileNotFoundError("no `hyperspace` console script found on .venv or PATH")
@@ -61,7 +61,7 @@ def check_pytest(evidence: dict) -> bool:
     python = _venv_python()
     proc = subprocess.run(
         [str(python), "-m", "pytest", "tests/test_http.py", "-q"],
-        cwd=ROOT, capture_output=True, text=True,
+        cwd=ROOT, capture_output=True, encoding="utf-8", errors="replace",
     )
     summary_line = ""
     for line in proc.stdout.splitlines()[::-1]:
@@ -186,7 +186,7 @@ def check_live_smoke(evidence: dict) -> bool:
         python = _venv_python()
         init_proc = subprocess.run(
             [str(_hyperspace_bin()), "init", "--dir", str(project_dir)],
-            capture_output=True, text=True,
+            capture_output=True, encoding="utf-8", errors="replace",
         )
         route_table["hyperspace init"] = f"exit={init_proc.returncode}"
         if init_proc.returncode != 0:
@@ -198,7 +198,7 @@ def check_live_smoke(evidence: dict) -> bool:
         port = _free_port()
         serve_proc = subprocess.Popen(
             [str(_hyperspace_bin()), "serve", "--port", str(port), "--dir", str(project_dir)],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8", errors="replace",
         )
         try:
             if not _wait_for_port("127.0.0.1", port, timeout=10.0):
@@ -290,13 +290,13 @@ def check_live_smoke(evidence: dict) -> bool:
             try:
                 lsof = subprocess.run(
                     ["lsof", "-nP", f"-iTCP:{port}", "-sTCP:LISTEN"],
-                    capture_output=True, text=True, timeout=5,
+                    capture_output=True, encoding="utf-8", errors="replace", timeout=5,
                 )
                 listener_line = _trim(lsof.stdout, 500)
             except (FileNotFoundError, subprocess.TimeoutExpired):
                 try:
                     netstat = subprocess.run(
-                        ["netstat", "-an"], capture_output=True, text=True, timeout=5,
+                        ["netstat", "-an"], capture_output=True, encoding="utf-8", errors="replace", timeout=5,
                     )
                     listener_line = "\n".join(
                         line for line in netstat.stdout.splitlines() if str(port) in line
@@ -313,12 +313,7 @@ def check_live_smoke(evidence: dict) -> bool:
             if not loopback_ok or bound_to_all_interfaces:
                 all_ok = False
         finally:
-            serve_proc.terminate()
-            try:
-                serve_proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                serve_proc.kill()
-                serve_proc.wait(timeout=5)
+            stop_tree(serve_proc)
 
     evidence["route_table"] = route_table
     return all_ok

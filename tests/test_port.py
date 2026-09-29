@@ -90,7 +90,7 @@ def test_d_init_writes_measured_budget_fields_only(tmp_path):
     proc = subprocess.run(
         [sys.executable, str(ROOT / "bin" / "loop_state.py"), "init",
          "--goal", "port-check", "--input", str(source), "--workspace", str(tmp_path)],
-        capture_output=True, text=True,
+        capture_output=True, encoding="utf-8", errors="replace",
     )
     assert proc.returncode == 0, proc.stderr
     data = json.loads((tmp_path / "port-check" / "loop.state.json").read_text(encoding="utf-8"))
@@ -110,7 +110,7 @@ def test_e_port_scan_check_writes_pass(tmp_path):
     out = tmp_path / "port_scan.json"
     proc = subprocess.run(
         [sys.executable, str(ROOT / "probes" / "check_port_scan.py"), "--out", str(out)],
-        capture_output=True, text=True, cwd=ROOT,
+        capture_output=True, encoding="utf-8", errors="replace", cwd=ROOT,
     )
     assert out.is_file(), proc.stdout + proc.stderr
     verdict = json.loads(out.read_text(encoding="utf-8"))
@@ -150,19 +150,19 @@ def test_validate_candidate_script(tmp_path):
     script = ROOT / "bin" / "validate_candidate.py"
     good = tmp_path / "good.json"
     good.write_text(json.dumps(_candidate()), encoding="utf-8")
-    ok = subprocess.run([sys.executable, str(script), str(good)], capture_output=True, text=True)
+    ok = subprocess.run([sys.executable, str(script), str(good)], capture_output=True, encoding="utf-8", errors="replace")
     assert ok.returncode == 0, ok.stdout + ok.stderr
     assert "VALID" in ok.stdout
 
     bad = tmp_path / "bad.json"
     bad.write_text(json.dumps(_candidate(module="m", legacy_stated_type="task")), encoding="utf-8")
-    refused = subprocess.run([sys.executable, str(script), str(bad)], capture_output=True, text=True)
+    refused = subprocess.run([sys.executable, str(script), str(bad)], capture_output=True, encoding="utf-8", errors="replace")
     assert refused.returncode == 1
     assert "INVALID" in refused.stdout
     assert "legacy_stated_type" in refused.stdout  # pydantic's own message, printed
 
     shipped = ROOT / "skills" / "gear2-understand" / "references" / "candidate-template.json"
-    template = subprocess.run([sys.executable, str(script), str(shipped)], capture_output=True, text=True)
+    template = subprocess.run([sys.executable, str(script), str(shipped)], capture_output=True, encoding="utf-8", errors="replace")
     assert template.returncode == 0, template.stdout + template.stderr
 
 
@@ -171,7 +171,7 @@ def test_build_gate_accepts_the_plugins_closure_labels(tmp_path):
     import node_gates  # noqa: PLC0415
 
     workplan = tmp_path / "workplan.json"
-    workplan.write_text(json.dumps({"project": "demo", "work_items": [{"external_id": "demo-a"}]}))
+    workplan.write_text(json.dumps({"project": "demo", "work_items": [{"external_id": "demo-a"}]}), encoding="utf-8")
     reconciliation = tmp_path / "RECONCILIATION.md"
     reconciliation.write_text("- demo-a → done\n", encoding="utf-8")
     verdicts = {}
@@ -180,7 +180,7 @@ def test_build_gate_accepts_the_plugins_closure_labels(tmp_path):
         snapshot.write_text(json.dumps([{
             "external_id": "demo-a", "state": "done", "completed_by": label,
             "updated_at": "2026-09-26T00:00",
-        }]))
+        }]), encoding="utf-8")
         verdicts[label] = node_gates.check_executing(
             workplan=workplan, verifications_dir=tmp_path / "none",
             reconciliation=reconciliation, graph_snapshot=snapshot,

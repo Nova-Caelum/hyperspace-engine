@@ -5,7 +5,9 @@ One goal, start to finish, with the commands that moved it and the artifacts eac
 **About the content:** the folder layout, file names, command shapes, gate behaviour and refusal
 messages here are taken from the engine's own source and are exact. The *goal* is illustrative — a small
 feature, chosen because it is big enough to need all five stations and small enough to read in one
-sitting. Where a value would differ in your run, it is written as a placeholder.
+sitting. Where a value would differ in your run, it is written as a placeholder — `<plugin>` is the
+installed plugin's root, which Claude Code substitutes for `${CLAUDE_PLUGIN_ROOT}` in the skills. Every
+command runs from the project root and is the same on macOS, Linux and Windows.
 
 ---
 
@@ -37,7 +39,7 @@ The verbatim ask is written down first, then the run is opened against it:
 # the ask, exactly as it was given, before anyone paraphrases it
 $EDITOR hyperspace/runs/honest-status/original_input.md
 
-python3 bin/loop_state.py init \
+.hyperspace/env/bin/python "<plugin>/bin/loop_state.py" init \
   --goal honest-status \
   --input hyperspace/runs/honest-status/original_input.md \
   --workspace hyperspace/runs
@@ -64,7 +66,7 @@ honest-status/
 The state file reads `status: framing`, `current_node: framing`. Then the run enters the station:
 
 ```bash
-python3 bin/loop_state.py set-node hyperspace/runs/honest-status/loop.state.json --node understanding
+.hyperspace/env/bin/python "<plugin>/bin/loop_state.py" set-node hyperspace/runs/honest-status/loop.state.json --node understanding
 ```
 
 `01_understand/` is created by this station, as each node folder is created by its own gear.
@@ -95,7 +97,7 @@ units routinely describe a system that is still broken end to end.
 Dry run first — same verdict, nothing frozen:
 
 ```bash
-python3 bin/loop_state.py check hyperspace/runs/honest-status/loop.state.json \
+.hyperspace/env/bin/python "<plugin>/bin/loop_state.py" check hyperspace/runs/honest-status/loop.state.json \
   --node understanding --tests hyperspace/runs/honest-status/01_understand/tests.json
 ```
 
@@ -109,7 +111,7 @@ path from entry to finish (SystemShape §11.9; PRD C10/C12)
 One edit, re-run, and the gate reports a count line. Now pass it for real:
 
 ```bash
-python3 bin/loop_state.py gate-pass hyperspace/runs/honest-status/loop.state.json \
+.hyperspace/env/bin/python "<plugin>/bin/loop_state.py" gate-pass hyperspace/runs/honest-status/loop.state.json \
   --node understanding --by <agent> \
   --artifact hyperspace/runs/honest-status/01_understand/Problem.md \
              hyperspace/runs/honest-status/01_understand/tests.json \
@@ -126,7 +128,7 @@ and `DRIVE_MAP.md` is rewritten.
 ## Station 2 — Decide
 
 ```bash
-python3 bin/loop_state.py set-node hyperspace/runs/honest-status/loop.state.json --node deciding
+.hyperspace/env/bin/python "<plugin>/bin/loop_state.py" set-node hyperspace/runs/honest-status/loop.state.json --node deciding
 ```
 
 `02_decide/` appears. Four artifacts: `Decision.md` (the choice and why), `mapping.json` (tests →
@@ -147,7 +149,7 @@ Cutting is fine. Cutting silently is what the gate prevents.
 ### The gate
 
 ```bash
-python3 bin/loop_state.py check hyperspace/runs/honest-status/loop.state.json \
+.hyperspace/env/bin/python "<plugin>/bin/loop_state.py" check hyperspace/runs/honest-status/loop.state.json \
   --node deciding --decision hyperspace/runs/honest-status/02_decide/mapping.json
 ```
 
@@ -164,7 +166,7 @@ that read as complete and quietly did not address the criterion a human cares ab
 Fix both, re-run, pass:
 
 ```bash
-python3 bin/loop_state.py gate-pass hyperspace/runs/honest-status/loop.state.json \
+.hyperspace/env/bin/python "<plugin>/bin/loop_state.py" gate-pass hyperspace/runs/honest-status/loop.state.json \
   --node deciding --by <agent> \
   --artifact hyperspace/runs/honest-status/02_decide/Decision.md \
              hyperspace/runs/honest-status/02_decide/mapping.json \
@@ -180,7 +182,7 @@ Exit 0. Four more artifacts frozen.
 ## Station 3 — Draft
 
 ```bash
-python3 bin/loop_state.py set-node hyperspace/runs/honest-status/loop.state.json --node specifying
+.hyperspace/env/bin/python "<plugin>/bin/loop_state.py" set-node hyperspace/runs/honest-status/loop.state.json --node specifying
 ```
 
 `03_draft/` appears: `PRD.md`, `Plan.md`, `workplan.json`, and the component list.
@@ -209,7 +211,7 @@ Filing happens: one `upsert_work_item` call per task block against the project's
 ### The gate
 
 ```bash
-python3 bin/loop_state.py check hyperspace/runs/honest-status/loop.state.json \
+.hyperspace/env/bin/python "<plugin>/bin/loop_state.py" check hyperspace/runs/honest-status/loop.state.json \
   --node specifying --plan hyperspace/runs/honest-status/03_draft/Plan.md
 ```
 
@@ -227,7 +229,7 @@ the engine has that the work exists as a trackable row. File the row instead; le
 id. Then:
 
 ```bash
-python3 bin/loop_state.py gate-pass hyperspace/runs/honest-status/loop.state.json \
+.hyperspace/env/bin/python "<plugin>/bin/loop_state.py" gate-pass hyperspace/runs/honest-status/loop.state.json \
   --node specifying --by <agent> \
   --artifact hyperspace/runs/honest-status/03_draft/PRD.md hyperspace/runs/honest-status/03_draft/Plan.md \
   --plan hyperspace/runs/honest-status/03_draft/Plan.md
@@ -240,7 +242,7 @@ Exit 0.
 ## Station 4 — Build
 
 ```bash
-python3 bin/loop_state.py set-node hyperspace/runs/honest-status/loop.state.json --node executing
+.hyperspace/env/bin/python "<plugin>/bin/loop_state.py" set-node hyperspace/runs/honest-status/loop.state.json --node executing
 ```
 
 `build/` appears, one subfolder per row. `BUILD_LEDGER.md` at the run root gets one line per row.
@@ -258,7 +260,7 @@ writes a run file per attempt into `misc/verifications/`. `RECONCILIATION.md` gi
 ### The gate, and a HOLD
 
 ```bash
-python3 bin/loop_state.py gate-pass hyperspace/runs/honest-status/loop.state.json \
+.hyperspace/env/bin/python "<plugin>/bin/loop_state.py" gate-pass hyperspace/runs/honest-status/loop.state.json \
   --node executing --by <agent> \
   --artifact hyperspace/runs/honest-status/BUILD_LEDGER.md hyperspace/runs/honest-status/RECONCILIATION.md \
   --workplan hyperspace/runs/honest-status/03_draft/workplan.json \
@@ -310,7 +312,7 @@ That is an **escape** — a defect the human's test caught that the run's own te
 recorded:
 
 ```bash
-python3 bin/loop_state.py confirm hyperspace/runs/honest-status/loop.state.json \
+.hyperspace/env/bin/python "<plugin>/bin/loop_state.py" confirm hyperspace/runs/honest-status/loop.state.json \
   --by <human> --escaped 1 --caught 0
 ```
 

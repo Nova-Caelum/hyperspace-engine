@@ -71,7 +71,7 @@ def run(out_dir, opts) -> bool:
     findings = scan(ROOT, SCANNED_DIRS, TERMS, case_insensitive=True)
     excluded, real = [], []
     for f in findings:
-        rel = str(f.path)
+        rel = f.path.as_posix()  # the exclusion set is written with forward slashes
         line = f"{rel}:{f.line}: [{f.term}] {f.text[:200]}"
         if _is_denylist_definition_line(rel, f.term, f.text):
             excluded.append(line)

@@ -51,7 +51,7 @@ row closure: not applicable — no rows exist for this artifact; rows are create
 
 What `check_understanding` computes (`bin/node_gates.py`): the tests file parses; it validates as a `CandidateWorkItem` against the contract vendored in the plugin (`hyperspace/contracts/candidate.py`); ≥1 criterion is machine-checkable (C10); ≥1 criterion's statement begins `WHOLE-PATH:` (C10/C12 — the criterion that would have caught the proposal gate). `--node understanding` without `--tests` is exit 2. A spike never opened a run and has nothing to gate; its exit is the recommendation in chat.
 
-`${CLAUDE_PLUGIN_ROOT}` is the installed plugin's root, which Claude Code substitutes into this skill's text; every command in this skill runs with `.hyperspace/env/bin/python`, the project's isolated environment. A `Problem.md` or `tests.json` edit after exit 0 is a double-back: the state layer detects it by hash.
+`${CLAUDE_PLUGIN_ROOT}` is the installed plugin's root, which Claude Code substitutes into this skill's text; every command in this skill runs with `.hyperspace/env/bin/python`, the project's isolated environment — the same spelling on macOS, Linux and Windows, run from the project root. A `Problem.md` or `tests.json` edit after exit 0 is a double-back: the state layer detects it by hash.
 
 ## The stops
 

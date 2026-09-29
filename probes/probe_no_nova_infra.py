@@ -20,7 +20,9 @@ Two sub-checks:
       (Escalate clause) — the door's own code refuses to bind anything but
       127.0.0.1/localhost (`hyperspace/http/server.py::Door.__init__`).
 
-Usage: imported by probes/run.py; PROBE = "no_nova_infra"; run(out_dir, opts) -> bool.
+Usage: imported by probes/run.py; from hyperspace.venv_paths import find_venv_python  # noqa: E402
+
+PROBE = "no_nova_infra"; run(out_dir, opts) -> bool.
 """
 from __future__ import annotations
 
@@ -41,6 +43,8 @@ from scan_tree import scan  # noqa: E402
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+from hyperspace.venv_paths import find_venv_python  # noqa: E402
+
 PROBE = "no_nova_infra"
 
 SCANNED_DIRS = ["bin", "skills", "hyperspace", "ui", "probes", "hooks"]
@@ -74,7 +78,7 @@ def _run_scan() -> dict:
     findings = scan(ROOT, SCANNED_DIRS, TERMS, case_insensitive=True)
     excluded, real = [], []
     for f in findings:
-        rel = str(f.path)
+        rel = f.path.as_posix()  # the exclusion set is written with forward slashes
         line = f"{rel}:{f.line}: [{f.term}] {f.text[:200]}"
         if _is_denylist_definition_line(rel, f.term, f.text):
             excluded.append(line)
@@ -94,12 +98,17 @@ def _run_scan() -> dict:
 
 
 async def _sample_connections(samples: list[str]) -> None:
-    pgrep = subprocess.run(["pgrep", "-f", "hyperspace.mcp"], capture_output=True, text=True)
+    # `pgrep`/`lsof` are POSIX tools (Windows ships neither); without them the
+    # sample is empty and `network_observation` says why — disclosed, never
+    # penalised (module docstring).
+    if shutil.which("pgrep") is None or shutil.which("lsof") is None:
+        return
+    pgrep = subprocess.run(["pgrep", "-f", "hyperspace.mcp"], capture_output=True, encoding="utf-8", errors="replace")
     pids = [p for p in pgrep.stdout.split() if p.strip()]
     for pid in pids:
         try:
             lsof = subprocess.run(
-                ["lsof", "-nP", "-a", "-iTCP", "-p", pid], capture_output=True, text=True, timeout=5,
+                ["lsof", "-nP", "-a", "-iTCP", "-p", pid], capture_output=True, encoding="utf-8", errors="replace", timeout=5,
             )
             for line in lsof.stdout.splitlines()[1:]:
                 if line.strip():
@@ -111,7 +120,7 @@ async def _sample_connections(samples: list[str]) -> None:
 async def _live_network_check() -> dict:
     from hyperspace.store import Store
 
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         project_dir = Path(tmp)
         db_path = project_dir / ".hyperspace" / "graph.db"
         Store.init(db_path).close()
@@ -119,10 +128,9 @@ async def _live_network_check() -> dict:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.bind(("127.0.0.1", 0))
             port = s.getsockname()[1]
-        (project_dir / ".hyperspace" / "config.toml").write_text(f"port = {port}\n")
+        (project_dir / ".hyperspace" / "config.toml").write_text(f"port = {port}\n", encoding="utf-8")
 
-        venv_python = ROOT / ".venv" / "bin" / "python"
-        python = venv_python if venv_python.exists() else Path(sys.executable)
+        python = find_venv_python(ROOT / ".venv") or Path(sys.executable)
 
         from mcp import StdioServerParameters
         from mcp.client.session import ClientSession
@@ -158,13 +166,13 @@ async def _live_network_check() -> dict:
                 await asyncio.sleep(0.2)
                 await _sample_connections(samples)
 
-        lsof_present = shutil.which("lsof") is not None
+        lsof_present = shutil.which("lsof") is not None and shutil.which("pgrep") is not None
         non_loopback = [
             ln for ln in samples
             if not ln.startswith("<lsof timed out") and "127.0.0.1" not in ln and "localhost" not in ln
         ]
         if not lsof_present:
-            network_observation = "not available: `lsof` not on PATH"
+            network_observation = "not available: `pgrep`/`lsof` not on PATH (POSIX tools; Windows ships neither)"
         elif not samples:
             network_observation = "not available: no TCP lines sampled (see connection_samples for detail)"
         else:

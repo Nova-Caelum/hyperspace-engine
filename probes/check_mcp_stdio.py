@@ -3,10 +3,13 @@
 
 Two sub-checks, both must PASS:
   (a) `tests/test_mcp_stdio.py` passes under the repo's own venv.
-  (b) a live scripted stdio session: `tools/list` (record the names), one
-      `tools/call` per the seven required tools against a fresh temp project
-      (record `isError` and the top-level result keys), then confirms the
-      loopback door answered on its configured port after the first call.
+  (b) a live scripted stdio session against a fresh temp project (its path
+      contains a space) whose `.hyperspace/env` is REALLY provisioned by
+      `provision_env` — the server started exactly as `.mcp.json` would start
+      it (`probes/_mcp_launch.py`: the substituted command + args, no shell):
+      `tools/list` (record the names), one `tools/call` per the seven required
+      tools (record `isError` and the top-level result keys), then confirms
+      the loopback door answered on its configured port after the first call.
 
 Usage: probes/check_mcp_stdio.py --out <path>
 """
@@ -22,9 +25,12 @@ import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _mcp_launch import mcp_launch  # noqa: E402
 from _verdict import write_verdict  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from hyperspace.venv_paths import find_venv_python  # noqa: E402
 PROJECT = "mcp-stdio-probe"
 
 REQUIRED_TOOL_NAMES = [
@@ -40,8 +46,7 @@ def _trim(text: str | None, limit: int = 4000) -> str:
 
 
 def _venv_python() -> Path:
-    venv_python = ROOT / ".venv" / "bin" / "python"
-    return venv_python if venv_python.exists() else Path(sys.executable)
+    return find_venv_python(ROOT / ".venv") or Path(sys.executable)
 
 
 # ── (a) pytest ───────────────────────────────────────────────────────────
@@ -51,7 +56,7 @@ def check_pytest(evidence: dict) -> bool:
     python = _venv_python()
     proc = subprocess.run(
         [str(python), "-m", "pytest", "tests/test_mcp_stdio.py", "-q"],
-        cwd=ROOT, capture_output=True, text=True,
+        cwd=ROOT, capture_output=True, encoding="utf-8", errors="replace",
     )
     summary_line = ""
     for line in proc.stdout.splitlines()[::-1]:
@@ -84,7 +89,7 @@ def _init_project(project_dir: Path, port: int) -> None:
     db_path = project_dir / ".hyperspace" / "graph.db"
     store = Store.init(db_path)
     store.close()
-    (project_dir / ".hyperspace" / "config.toml").write_text(f"port = {port}\n")
+    (project_dir / ".hyperspace" / "config.toml").write_text(f"port = {port}\n", encoding="utf-8")
 
 
 def _candidate(ext: str, criteria: list[dict]) -> dict:
@@ -126,8 +131,10 @@ async def _live_scenario(project_dir: Path, port: int, evidence: dict) -> bool:
     from mcp.client.stdio import stdio_client
     import os
 
+    command, args = mcp_launch(ROOT, project_dir)
+    evidence["launch"] = {"command": command, "args": args}
     env = {**os.environ, "CLAUDE_PROJECT_DIR": str(project_dir)}
-    params = StdioServerParameters(command=str(_venv_python()), args=["-m", "hyperspace.mcp"], env=env)
+    params = StdioServerParameters(command=command, args=args, env=env)
 
     all_ok = True
     tool_results: dict = {}
@@ -215,7 +222,7 @@ async def _live_scenario(project_dir: Path, port: int, evidence: dict) -> bool:
                     tool_results["upsert_module"]["keys"] = sorted(_content_json(mod).keys())
 
                 (project_dir / "out").mkdir(parents=True, exist_ok=True)
-                (project_dir / "out" / "result.txt").write_text("result\n")
+                (project_dir / "out" / "result.txt").write_text("result\n", encoding="utf-8")
 
                 closed = await session.call_tool("complete_workitem", {
                     "project": PROJECT, "external_id": ext1,
@@ -243,10 +250,17 @@ async def _live_scenario(project_dir: Path, port: int, evidence: dict) -> bool:
 
 
 def check_live_smoke(evidence: dict) -> bool:
-    with tempfile.TemporaryDirectory() as tmp:
-        project_dir = Path(tmp)
+    from hyperspace.setup.provision import provision_env
+
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+        project_dir = Path(tmp) / "mcp probe project"
+        project_dir.mkdir()
         port = _free_port()
         _init_project(project_dir, port)
+        provisioned = provision_env(project_dir)
+        evidence["provision"] = provisioned
+        if not provisioned["ok"]:
+            return False
         try:
             return asyncio.run(_live_scenario(project_dir, port, evidence))
         except Exception as exc:  # noqa: BLE001 — recorded, not swallowed

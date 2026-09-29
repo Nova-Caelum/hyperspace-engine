@@ -33,6 +33,9 @@ from _verdict import write_verdict  # noqa: E402
 from scan_tree import scan  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+from hyperspace.venv_paths import find_venv_python  # noqa: E402
 SCANNED_DIRS = ["bin", "skills", "hyperspace"]
 FORBIDDEN_TERMS = [
     "NovaCaelum_Obs",
@@ -73,7 +76,7 @@ def check_scan(evidence: dict) -> bool:
         "terms": FORBIDDEN_TERMS,
         "case_insensitive": True,
         "findings": len(findings),
-        "first_findings": [f"{f.path}:{f.line}: [{f.term}] {f.text[:160]}" for f in findings[:20]],
+        "first_findings": [f"{f.path.as_posix()}:{f.line}: [{f.term}] {f.text[:160]}" for f in findings[:20]],
     }
     return not findings
 
@@ -125,7 +128,7 @@ def check_measured_budget(evidence: dict) -> bool:
         proc = subprocess.run(
             [sys.executable, str(ROOT / "bin" / "loop_state.py"), "init",
              "--goal", "port-scan", "--input", str(source), "--workspace", tmp],
-            capture_output=True, text=True,
+            capture_output=True, encoding="utf-8", errors="replace",
         )
         state_path = Path(tmp) / "port-scan" / "loop.state.json"
         if proc.returncode != 0 or not state_path.is_file():
@@ -143,18 +146,15 @@ def check_measured_budget(evidence: dict) -> bool:
 
 
 def check_pytest(evidence: dict) -> bool:
-    python = ROOT / ".venv" / "bin" / "python"
-    if not python.is_file():
-        evidence["pytest"] = {"error": f"interpreter not found: {python}"}
-        return False
+    python = find_venv_python(ROOT / ".venv") or Path(sys.executable)
     proc = subprocess.run(
         [str(python), "-m", "pytest", *PYTEST_TARGETS, "-q"],
-        cwd=ROOT, capture_output=True, text=True,
+        cwd=ROOT, capture_output=True, encoding="utf-8", errors="replace",
         env={**os.environ, INNER_ENV: "1"},
     )
     lines = [ln for ln in proc.stdout.splitlines() if ln.strip()]
     evidence["pytest"] = {
-        "command": f".venv/bin/python -m pytest {' '.join(PYTEST_TARGETS)} -q",
+        "command": f"{python} -m pytest {' '.join(PYTEST_TARGETS)} -q",
         "exit_code": proc.returncode,
         "summary": lines[-1] if lines else "",
     }

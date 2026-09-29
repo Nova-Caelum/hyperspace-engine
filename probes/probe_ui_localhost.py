@@ -14,6 +14,7 @@ Usage: imported by probes/run.py; PROBE = "ui_localhost"; run(out_dir, opts) -> 
 from __future__ import annotations
 
 import os
+import shutil
 import socket
 import subprocess
 import sys
@@ -22,12 +23,15 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _proc import stop_tree  # noqa: E402
 from _verdict import write_verdict  # noqa: E402
 import check_ui_build as cub  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+from hyperspace.venv_paths import find_venv_python  # noqa: E402
+
 PROBE = "ui_localhost"
 
 _AUTH_ENV_KEYS = ("AUTH_SECRET", "POSTGRES_URL")
@@ -118,8 +122,8 @@ def run(out_dir, opts) -> bool:
             return False
 
         port = _free_port()
-        venv_python = ROOT / ".venv" / "bin" / "python"
-        hyperspace_bin = (venv_python.parent / "hyperspace") if venv_python.exists() else "hyperspace"
+        venv_python = find_venv_python(ROOT / ".venv") or Path(sys.executable)
+        hyperspace_bin = shutil.which("hyperspace", path=str(venv_python.parent)) or "hyperspace"
 
         env = {k: v for k, v in os.environ.items() if k not in _AUTH_ENV_KEYS}
         evidence["serve_env_keys"] = sorted(env.keys())
@@ -127,7 +131,7 @@ def run(out_dir, opts) -> bool:
 
         serve_proc = subprocess.Popen(
             [str(hyperspace_bin), "serve", "--port", str(port), "--dir", str(project_dir)],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8", errors="replace", env=env,
         )
         page_ok = False
         try:
@@ -140,12 +144,7 @@ def run(out_dir, opts) -> bool:
 
             page_ok = cub.check_page(evidence, f"http://127.0.0.1:{port}/", getattr(opts, "source", None))
         finally:
-            serve_proc.terminate()
-            try:
-                serve_proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                serve_proc.kill()
-                serve_proc.wait(timeout=5)
+            stop_tree(serve_proc)
 
     auth_js_hits = _auth_js_scan()
     evidence["auth_js_scan"] = {"hits": auth_js_hits, "no_auth_js": not auth_js_hits}

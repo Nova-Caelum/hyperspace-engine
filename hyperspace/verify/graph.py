@@ -94,7 +94,9 @@ def render_observation(path_label: str, delta: Any) -> str:
     """One observation block from a `PathDelta` — vendored from the canonical
     `judges/semantics_agent.py` (not a model call; the judge row's runners
     consume the rendered blocks)."""
-    head = f"--- {path_label}"
+    # One separator style for the judge on every OS: the criteria it
+    # compares against name paths with forward slashes.
+    head = f"--- {Path(path_label).as_posix()}"
     if getattr(delta, "repo", None):
         head += f" (repo: {delta.repo})"
     head += " ---"

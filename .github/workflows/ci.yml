@@ -11,28 +11,72 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        # Git Bash on Windows — the shell Claude Code runs this plugin's hook in.
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install uv
-      - run: uv venv && uv pip install -e ".[dev]"
-      - run: uv run python -m pytest tests/ -q
-      - run: npm install -g @anthropic-ai/claude-code
-      - run: claude plugin validate --strict .
-      - run: >
-          uv run python probes/run.py --out probe-out --no-paid
-          no_nova_infra no_vault_refs gear_names known_defects pydantic_graph
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - run: >
+      - run: pip install uv
+      - run: uv venv && uv pip install -e ".[dev]"
+      - run: uv run python -m pytest tests/ -q -rs
+      - run: npm install -g @anthropic-ai/claude-code
+      - run: claude plugin validate --strict .
+      - name: probes (keyless; claude_runtime runs the real claude binary)
+        run: >
+          uv run python probes/run.py --out probe-out --no-paid
+          no_nova_infra no_vault_refs gear_names known_defects pydantic_graph
+          store_contract installer mcp_tools claude_runtime
+      - name: setup skill command forms (bash)
+        run: |
+          set -eu
+          P="$RUNNER_TEMP/skill project"
+          mkdir -p "$P" && cd "$P"
+          uv run --no-project --python ">=3.11" "$GITHUB_WORKSPACE/bin/hyperspace_setup.py" --help > /dev/null
+          python "$GITHUB_WORKSPACE/bin/hyperspace_setup.py" --dir "$P" --provision --judge none
+          .hyperspace/env/bin/hyperspace --version
+          .hyperspace/env/bin/python "$GITHUB_WORKSPACE/bin/loop_state.py" --help > /dev/null
+          .hyperspace/env/bin/hyperspace doctor
+      - name: setup skill command forms (PowerShell 7)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Set-Location (Join-Path $env:RUNNER_TEMP 'skill project')
+          $root = $env:GITHUB_WORKSPACE -replace '\\', '/'
+          .hyperspace/env/bin/hyperspace --version
+          if ($LASTEXITCODE) { exit 1 }
+          .hyperspace/env/bin/python "$root/bin/loop_state.py" --help | Out-Null
+          if ($LASTEXITCODE) { exit 1 }
+          .hyperspace/env/bin/hyperspace doctor
+          if ($LASTEXITCODE) { exit 1 }
+      - name: setup skill command forms (Windows PowerShell 5.1)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          Set-Location (Join-Path $env:RUNNER_TEMP 'skill project')
+          $root = $env:GITHUB_WORKSPACE -replace '\\', '/'
+          .hyperspace/env/bin/hyperspace --version
+          if ($LASTEXITCODE) { exit 1 }
+          .hyperspace/env/bin/python "$root/bin/loop_state.py" --help | Out-Null
+          if ($LASTEXITCODE) { exit 1 }
+      - name: console bundle reproducibility
+        if: runner.os == 'Linux'
+        run: >
           uv run python probes/check_ui_build.py --out probe-out/ui_build.json
           --no-page
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: probe-out
+          name: probe-out-${{ matrix.os }}
           path: probe-out/

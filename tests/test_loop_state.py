@@ -31,7 +31,7 @@ SCHEMA = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
 def _run_cli(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, str(BIN_DIR / "loop_state.py"), *args],
-        text=True,
+        encoding="utf-8", errors="replace",
         capture_output=True,
         check=False,
     )
@@ -635,7 +635,7 @@ def _git(root: Path, *args: str, date: str | None = None) -> None:
     env = {**os.environ, "GIT_AUTHOR_DATE": date, "GIT_COMMITTER_DATE": date} if date else None
     subprocess.run(
         ["git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", *args],
-        cwd=root, check=True, capture_output=True, text=True, env=env,
+        cwd=root, check=True, capture_output=True, encoding="utf-8", errors="replace", env=env,
     )
 
 
@@ -657,8 +657,8 @@ class GatePassExecutingHoldTests(unittest.TestCase):
         self.root = Path(self._tmp.name)
         self.project_dir = self.root / "proj"
         self.project_dir.mkdir()
-        (self.project_dir / ".gitignore").write_text(".hyperspace/\n")
-        (self.project_dir / "README.md").write_text("demo\n")
+        (self.project_dir / ".gitignore").write_text(".hyperspace/\n", encoding="utf-8")
+        (self.project_dir / "README.md").write_text("demo\n", encoding="utf-8")
         _git(self.project_dir, "init", "-q")
         _git(self.project_dir, "add", ".")
         _git(self.project_dir, "commit", "-q", "-m", "init", date=_ago(120))
@@ -696,7 +696,7 @@ class GatePassExecutingHoldTests(unittest.TestCase):
         time.sleep(0.02)
         p = self.project_dir / "out" / "result.txt"
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text("result\n")
+        p.write_text("result\n", encoding="utf-8")
 
     def _close(self, ext: str, attestations: list[dict] | None = None) -> dict:
         from hyperspace.judge import NoneJudge
@@ -721,7 +721,7 @@ class GatePassExecutingHoldTests(unittest.TestCase):
         _run_cli("set-node", str(state_path), "--node", "executing")
 
         workplan = self.root / "workplan.json"
-        workplan.write_text(json.dumps({"project": "demo-project", "work_items": [{"external_id": ext}]}))
+        workplan.write_text(json.dumps({"project": "demo-project", "work_items": [{"external_id": ext}]}), encoding="utf-8")
         reconciliation = self.root / "RECONCILIATION.md"
         reconciliation.write_text(f"- {ext} → done\n", encoding="utf-8")
 

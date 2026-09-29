@@ -49,7 +49,7 @@ row closure: not applicable — no rows exist for this artifact; rows are create
 
 What `check_deciding` computes (`bin/node_gates.py`), from `mapping.json` alone — its `tests_file`, `deferred_file` and `principles_file` are paths relative to its own directory: every `T1..TN` of the frozen tests file is referenced by ≥1 component; every component is kept by a test, kept by a live principle (an `external_id` in `principles.json` whose state is planned, in-progress or paused), or bulleted by exact name under `## Deferred` in `Deferred.md`; no unknown test id, no unknown or dead principle, no duplicate or nameless component. Every refusal of a run is listed at once. `--node deciding` without `--decision` is exit 2.
 
-`${CLAUDE_PLUGIN_ROOT}` is the installed plugin's root, which Claude Code substitutes into this skill's text; every command in this skill runs with `.hyperspace/env/bin/python`, the project's isolated environment. An edit to any of the four files after exit 0 is a double-back: the state layer detects it by hash.
+`${CLAUDE_PLUGIN_ROOT}` is the installed plugin's root, which Claude Code substitutes into this skill's text; every command in this skill runs with `.hyperspace/env/bin/python`, the project's isolated environment — the same spelling on macOS, Linux and Windows, run from the project root. An edit to any of the four files after exit 0 is a double-back: the state layer detects it by hash.
 
 ## The stops
 

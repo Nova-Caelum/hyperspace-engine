@@ -23,7 +23,7 @@ def test_unknown_probe_name_refused_writes_nothing(tmp_path):
     out_dir = tmp_path / "nested" / "probes-out"
     proc = subprocess.run(
         [str(_venv_python()), str(ROOT / "probes" / "run.py"), "--out", str(out_dir), "not-a-real-probe"],
-        cwd=ROOT, capture_output=True, text=True,
+        cwd=ROOT, capture_output=True, encoding="utf-8", errors="replace",
     )
     assert proc.returncode == 2, proc.stdout + proc.stderr
     assert "unknown probe name" in proc.stderr
@@ -36,7 +36,7 @@ def test_out_dir_is_created_for_a_valid_probe(tmp_path):
 
     proc = subprocess.run(
         [str(_venv_python()), str(ROOT / "probes" / "run.py"), "--out", str(out_dir), "gear_names"],
-        cwd=ROOT, capture_output=True, text=True,
+        cwd=ROOT, capture_output=True, encoding="utf-8", errors="replace",
     )
 
     assert out_dir.is_dir()

@@ -142,23 +142,30 @@ class CliJudge:
             ) from None
 
     def _invoke(self, prompt: str, instructions: str, model_cls: type[BaseModel]) -> str:
-        if self._which(self._binary) is None:
+        # argv[0] is the path `which` resolved, never the bare name: on Windows
+        # an npm-installed CLI is a `.cmd` shim that `which` finds via PATHEXT
+        # but CreateProcess cannot find by bare name.
+        executable = self._which(self._binary)
+        if executable is None:
             raise JudgeUnavailable(self.name, f"{self._binary!r} is not on PATH")
         if self.name == "claude-code":
-            return self._invoke_claude(prompt, instructions, model_cls)
-        return self._invoke_codex(prompt, instructions, model_cls)
+            return self._invoke_claude(executable, prompt, instructions, model_cls)
+        return self._invoke_codex(executable, prompt, instructions, model_cls)
 
     def _run_subprocess(self, argv: list[str]) -> Any:
         try:
-            return self._run(argv, capture_output=True, text=True, timeout=_TIMEOUT_SECONDS)
+            # The CLIs answer in UTF-8 JSON; decoding with the Windows ANSI
+            # code page would corrupt (or crash on) any non-ASCII evidence.
+            return self._run(argv, capture_output=True, encoding="utf-8", errors="replace",
+                             timeout=_TIMEOUT_SECONDS)
         except subprocess.TimeoutExpired:
             raise JudgeUnavailable(self.name, f"{self._binary} timed out after {_TIMEOUT_SECONDS}s") from None
         except OSError as exc:
             raise JudgeUnavailable(self.name, f"{self._binary} failed to start: {_trim(str(exc))}") from None
 
-    def _invoke_claude(self, prompt: str, instructions: str, model_cls: type[BaseModel]) -> str:
+    def _invoke_claude(self, executable: str, prompt: str, instructions: str, model_cls: type[BaseModel]) -> str:
         argv = [
-            "claude", "-p", prompt,
+            executable, "-p", prompt,
             "--output-format", "json",
             "--system-prompt", instructions,
             "--json-schema", json.dumps(model_cls.model_json_schema()),
@@ -168,14 +175,14 @@ class CliJudge:
             raise JudgeUnavailable(self.name, f"claude exited {result.returncode}: {_trim(result.stderr)}")
         return result.stdout
 
-    def _invoke_codex(self, prompt: str, instructions: str, model_cls: type[BaseModel]) -> str:
+    def _invoke_codex(self, executable: str, prompt: str, instructions: str, model_cls: type[BaseModel]) -> str:
         combined_prompt = f"{instructions}\n\n{prompt}"
         with tempfile.TemporaryDirectory() as tmp:
             schema_path = Path(tmp) / "schema.json"
             out_path = Path(tmp) / "last_message.txt"
             schema_path.write_text(json.dumps(model_cls.model_json_schema()), encoding="utf-8")
             argv = [
-                "codex", "exec", "--skip-git-repo-check",
+                executable, "exec", "--skip-git-repo-check",
                 "--output-schema", str(schema_path),
                 "--output-last-message", str(out_path),
                 combined_prompt,
