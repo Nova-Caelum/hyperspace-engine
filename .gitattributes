@@ -1,0 +1,6 @@
+# Checkouts use Unix line endings on every system, whatever core.autocrlf says:
+# a CRLF after the `#!/bin/sh` line stops the shell scripts under Git Bash.
+* text=auto eol=lf
+
+# Binary files this repository carries.
+*.png binary

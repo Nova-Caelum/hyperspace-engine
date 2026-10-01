@@ -9,14 +9,20 @@ where `<python>` is `python3`, `py -3`, `python`, or `uv run --no-project
 PowerShell and cmd — the `PYTHONPATH="…" python3 -m hyperspace.setup` it
 replaces was sh-only syntax.
 
-Puts this plugin's root on `sys.path` and hands off to
-`hyperspace.setup.__main__.main` — whose import chain is stdlib-only by
-design (see the import-chain note atop `hyperspace/setup/provision.py`).
+Puts this plugin's root on `sys.path`, checks the Python version, and hands
+off to `hyperspace.setup.__main__.main` — whose import chain is stdlib-only by
+design (see the import-chain note atop `hyperspace/setup/provision.py`). On a
+Python older than 3.11 the check exits with one plain sentence; without it the
+import below would fail inside `tomllib` with a traceback.
 """
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from hyperspace._pyfloor import require_python  # noqa: E402
+
+require_python()
 
 from hyperspace.setup.__main__ import main  # noqa: E402
 
