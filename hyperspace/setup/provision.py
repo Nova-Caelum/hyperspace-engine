@@ -33,10 +33,9 @@ import sys
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
+from .._pyfloor import MIN_PYTHON
 from ..config import write_config
 from ..venv_paths import WINDOWS, link_bin_to_scripts, native_python, portable_python
-
-MIN_PYTHON = (3, 11)
 
 _NPM_INSTALL_CMD = "npm install -g @anthropic-ai/claude-code"
 _PROBE_TIMEOUT_SECONDS = 30

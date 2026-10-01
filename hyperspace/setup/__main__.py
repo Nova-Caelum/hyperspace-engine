@@ -25,10 +25,14 @@ import argparse
 import sys
 from pathlib import Path
 
-from .._stdio import utf8_stdio
-from ..config import JUDGES
-from ..store import Store
-from .provision import provision_and_report
+from .._pyfloor import require_python
+
+require_python()
+
+from .._stdio import utf8_stdio  # noqa: E402
+from ..config import JUDGES  # noqa: E402
+from ..store import Store  # noqa: E402
+from .provision import provision_and_report  # noqa: E402
 
 
 def main(argv: list[str] | None = None, prog: str = "python -m hyperspace.setup") -> int:
