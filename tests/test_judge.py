@@ -336,6 +336,56 @@ def test_get_judge_hands_the_configured_model_to_the_cli_judge(kind):
     assert get_judge(Config(judge=kind)).model is None
 
 
+_VALID_EVIDENCE_PAYLOAD = {
+    "accepted": True,
+    "outcome_realized": True,
+    "criteria": [{"statement": "x", "discharged": True, "evidence": "out/result.txt exists"}],
+    "reason": "ok",
+    "uncertain": False,
+}
+
+
+def _claude_argv(call: str) -> list[str]:
+    """The argv a `claude-code` CliJudge builds for one judge call."""
+    captured: dict = {}
+    payload = _VALID_CQ_PAYLOAD if call == "criteria" else _VALID_EVIDENCE_PAYLOAD
+    runner = CliJudge("claude-code", run=_fake_run_ok("claude-code", payload, captured),
+                      which=_fake_which_present)
+    if call == "criteria":
+        asyncio.run(runner.judge_criteria("task statement", [_criterion()]))
+    else:
+        asyncio.run(runner.judge_evidence("task statement", [_criterion()], ["out/result.txt exists"]))
+    return captured["argv"]
+
+
+@pytest.mark.parametrize("call", ["criteria", "evidence"])
+def test_claude_judge_loads_only_what_a_judge_needs(call):
+    """A judge reads one prompt and answers in JSON. It needs no tools, no MCP
+    servers and no skills — and each of those, loaded from the user's own
+    Claude Code setup, is thousands of input tokens per call (measured
+    2026-10-05: ~45k tokens, ~$0.20 on sonnet, down to 3-5.5k with these three
+    flags). `--tools` is variadic, so the flag after its empty value must be
+    another flag, never the prompt."""
+    argv = _claude_argv(call)
+    assert argv[argv.index("--tools") + 1] == ""
+    assert argv[argv.index("--tools") + 2].startswith("--")
+    assert "--strict-mcp-config" in argv and "--mcp-config" not in argv
+    assert "--disable-slash-commands" in argv
+    # `--bare` and `--setting-sources` would also trim context, but `--bare`
+    # never reads the user's Claude sign-in and `--setting-sources` drops the
+    # user settings an API-key or proxy setup lives in: the judge must keep
+    # working for every way of being signed in.
+    assert "--bare" not in argv and "--setting-sources" not in argv
+
+
+def test_codex_judge_argv_carries_no_claude_flags():
+    captured: dict = {}
+    runner = CliJudge("codex", run=_fake_run_ok("codex", _VALID_CQ_PAYLOAD, captured),
+                      which=_fake_which_present)
+    asyncio.run(runner.judge_criteria("task statement", [_criterion()]))
+    assert not {"--tools", "--strict-mcp-config", "--disable-slash-commands"} & set(captured["argv"])
+
+
 @pytest.mark.parametrize("kind", ["claude-code", "codex"])
 def test_cli_judge_child_gets_no_stdin_and_no_session_marker(kind, monkeypatch):
     """Inside the engine's MCP server, stdin is the JSON-RPC pipe: a child

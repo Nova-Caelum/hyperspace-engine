@@ -10,16 +10,28 @@ single retry-then-`uncertain` handling is all that ever sees this runner fail.
 Exact argv, decided from each CLI's own `--help` output:
 
   * `claude-code` — `claude -p <prompt> --output-format json --system-prompt
-    <instructions> --json-schema <schema> [--model <model>]`. `claude --help`
-    documents `--output-format json` ("single result"), `--system-prompt
-    <prompt>`, `--json-schema <schema>` ("JSON Schema for structured output
-    validation") and `--model <model>` (an alias such as `sonnet`, or a full
-    model name). Register A19, verified end to end on 2026-10-05 with claude
-    2.1.285 (both judges, nested inside a Claude Code session): the envelope's
-    `result` is the answer's JSON as a string, which `_extract_json_payload`
-    unwraps; it also carries `structured_output` (the same answer as an
-    object), `is_error`, and `usage` / `total_cost_usd`. A bare object still
-    parses.
+    <instructions> --json-schema <schema> --tools "" --strict-mcp-config
+    --disable-slash-commands [--model <model>]`. `claude --help` documents
+    `--output-format json` ("single result"), `--system-prompt <prompt>`,
+    `--json-schema <schema>` ("JSON Schema for structured output validation")
+    and `--model <model>` (an alias such as `sonnet`, or a full model name).
+    Register A19, verified end to end on 2026-10-05 with claude 2.1.285 (both
+    judges, nested inside a Claude Code session): the envelope's `result` is
+    the answer's JSON as a string, which `_extract_json_payload` unwraps; it
+    also carries `structured_output` (the same answer as an object),
+    `is_error`, and `usage` / `total_cost_usd`. A bare object still parses.
+
+    The three trim flags (`_CLAUDE_CONTEXT_TRIM`) keep the judge from loading
+    the user's Claude Code setup: a judge reads one prompt and answers in JSON.
+    `--tools ""` removes every built-in tool ("Use \"\" to disable all
+    tools"; only the `--json-schema` answer tool is left), `--strict-mcp-config`
+    with no `--mcp-config` loads no MCP server, and `--disable-slash-commands`
+    loads no skills. Measured 2026-10-05, claude 2.1.285, sonnet, one criterion:
+    ~45k input tokens and $0.18-0.20 per call became 3-5.5k and $0.02-0.03, and
+    both judges still parse. `--bare` is deliberately not used (its help: "OAuth and keychain
+    are never read" — it would break every plan sign-in), nor `--setting-sources`
+    (it drops the user settings an API key or proxy lives in). `--tools` takes a
+    variable number of values, so the flag after its `""` must be another flag.
   * `codex` — `codex exec --skip-git-repo-check --output-schema <schema
     file> --output-last-message <output file> [-m <model>] <prompt>`. `codex
     exec --help` has NO `--output-format`/`--json-schema` flag at all — its
@@ -65,6 +77,9 @@ _BINARIES = {"claude-code": "claude", "codex": "codex"}
 _MODEL_FLAGS = {"claude-code": "--model", "codex": "-m"}
 # Removed from the child's environment: the Claude Code session marker.
 _STRIPPED_ENV = ("CLAUDECODE",)
+# What a judge does not need from the user's Claude Code setup (see the module
+# docstring). `--tools`'s empty value is followed by a flag, never the prompt.
+_CLAUDE_CONTEXT_TRIM = ("--tools", "", "--strict-mcp-config", "--disable-slash-commands")
 
 
 def _trim(text: str | None) -> str:
@@ -193,6 +208,7 @@ class CliJudge:
             "--output-format", "json",
             "--system-prompt", instructions,
             "--json-schema", json.dumps(model_cls.model_json_schema()),
+            *_CLAUDE_CONTEXT_TRIM,
             *self._model_args(),
         ]
         result = self._run_subprocess(argv)
