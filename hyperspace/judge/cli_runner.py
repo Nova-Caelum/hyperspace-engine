@@ -7,27 +7,35 @@ models. A missing binary, a non-zero exit, a timeout, or unparsable output
 each raise `JudgeUnavailable` — never any other exception, so the graph's
 single retry-then-`uncertain` handling is all that ever sees this runner fail.
 
-Exact argv, decided this session from real `--help` output (never run with a
-real prompt — register A19 is still unverified end to end; the test session's
-`judge_modes` probe settles it):
+Exact argv, decided from each CLI's own `--help` output:
 
   * `claude-code` — `claude -p <prompt> --output-format json --system-prompt
-    <instructions> --json-schema <schema>`. `claude --help` documents
-    `--output-format json` ("single result"), `--system-prompt <prompt>`, and
-    `--json-schema <schema>` ("JSON Schema for structured output validation")
-    as real flags. `--output-format json` is known (Decision.md, `### Error
-    handling`) to wrap its answer in an envelope, but the exact field name is
-    UNVERIFIED at authoring time — `_extract_json_payload` below handles both
-    an envelope with a `result` field (string or object) and a bare object,
-    per the brief's escalation instruction. Concern flagged in the report.
+    <instructions> --json-schema <schema> [--model <model>]`. `claude --help`
+    documents `--output-format json` ("single result"), `--system-prompt
+    <prompt>`, `--json-schema <schema>` ("JSON Schema for structured output
+    validation") and `--model <model>` (an alias such as `sonnet`, or a full
+    model name). Register A19, verified end to end on 2026-10-05 with claude
+    2.1.285 (both judges, nested inside a Claude Code session): the envelope's
+    `result` is the answer's JSON as a string, which `_extract_json_payload`
+    unwraps; it also carries `structured_output` (the same answer as an
+    object), `is_error`, and `usage` / `total_cost_usd`. A bare object still
+    parses.
   * `codex` — `codex exec --skip-git-repo-check --output-schema <schema
-    file> --output-last-message <output file> <prompt>`. `codex exec --help`
-    has NO `--output-format`/`--json-schema` flag at all (the brief's
-    assumption of a `claude`-shaped `codex exec` flag does not hold) — its
+    file> --output-last-message <output file> [-m <model>] <prompt>`. `codex
+    exec --help` has NO `--output-format`/`--json-schema` flag at all — its
     real structured-output mechanism is `--output-schema <file>` (a JSON
     Schema file) plus `-o/--output-last-message <file>` (the file the
-    agent's final message is written to). The judgment JSON is read from
-    that file, never from stdout.
+    agent's final message is written to), and `-m, --model <MODEL>` picks the
+    model. The judgment JSON is read from that file, never from stdout.
+
+`model` comes from `.hyperspace/config.toml`; with none set, the flag is left
+off and the CLI uses its own default model.
+
+Every child runs with stdin closed and without `CLAUDECODE`. Inside the
+engine's MCP server, stdin is the JSON-RPC pipe: a child that inherits it can
+read the server's next request (observed: `claude -p` waits 3 s on an
+inherited stdin before it starts). `CLAUDECODE` marks the calling Claude
+Code session, and the judge is a session of its own.
 
 Both CLIs also get the judgment model's JSON Schema embedded directly in the
 prompt text as a second, model-facing instruction (belt-and-braces: neither
@@ -36,6 +44,7 @@ CLI's schema flag has a verified enforcement guarantee at authoring time).
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import tempfile
@@ -53,6 +62,9 @@ _TIMEOUT_SECONDS = 120
 _MAX_ERROR_CHARS = 300  # never enough room for a leaked credential; see Out of scope
 
 _BINARIES = {"claude-code": "claude", "codex": "codex"}
+_MODEL_FLAGS = {"claude-code": "--model", "codex": "-m"}
+# Removed from the child's environment: the Claude Code session marker.
+_STRIPPED_ENV = ("CLAUDECODE",)
 
 
 def _trim(text: str | None) -> str:
@@ -92,20 +104,23 @@ def _parse(text: str, model_cls: type[BaseModel]) -> BaseModel:
 
 
 class CliJudge:
-    """`kind` in {"claude-code", "codex"}. `run` replaces `subprocess.run`
-    and `which` replaces `shutil.which` — the two injection points the
-    fakes use; production defaults are the real calls."""
+    """`kind` in {"claude-code", "codex"}; `model` is passed to the CLI when
+    set. `run` replaces `subprocess.run` and `which` replaces `shutil.which`
+    — the two injection points the fakes use; production defaults are the
+    real calls."""
 
     def __init__(
         self,
         kind: str,
         *,
+        model: str | None = None,
         run: Callable[..., Any] = subprocess.run,
         which: Callable[[str], str | None] = shutil.which,
     ) -> None:
         if kind not in _BINARIES:
             raise ValueError(f"unknown CLI judge kind {kind!r} — must be one of: claude-code, codex")
         self.name = kind
+        self.model = model
         self._binary = _BINARIES[kind]
         self._run = run
         self._which = which
@@ -129,8 +144,9 @@ class CliJudge:
     # ── internals ────────────────────────────────────────────────────────
 
     def _usage(self) -> dict:
-        # Neither CLI's JSON envelope is verified to carry token counts
-        # (register A19) — one request is the one fact we know for certain.
+        # Token counts are not read: claude's envelope carries them (A19,
+        # 2026-10-05) but codex's last-message file does not, so one request
+        # is the one fact both runners can report.
         return {"model": self.name, "input_tokens": 0, "output_tokens": 0, "requests": 1}
 
     def _parse_or_raise(self, text: str, model_cls: type[BaseModel]) -> BaseModel:
@@ -152,12 +168,20 @@ class CliJudge:
             return self._invoke_claude(executable, prompt, instructions, model_cls)
         return self._invoke_codex(executable, prompt, instructions, model_cls)
 
+    def _model_args(self) -> list[str]:
+        return [_MODEL_FLAGS[self.name], self.model] if self.model else []
+
+    @staticmethod
+    def _child_env() -> dict[str, str]:
+        return {key: value for key, value in os.environ.items() if key not in _STRIPPED_ENV}
+
     def _run_subprocess(self, argv: list[str]) -> Any:
         try:
             # The CLIs answer in UTF-8 JSON; decoding with the Windows ANSI
             # code page would corrupt (or crash on) any non-ASCII evidence.
-            return self._run(argv, capture_output=True, encoding="utf-8", errors="replace",
-                             timeout=_TIMEOUT_SECONDS)
+            return self._run(argv, stdin=subprocess.DEVNULL, capture_output=True,
+                             encoding="utf-8", errors="replace", timeout=_TIMEOUT_SECONDS,
+                             env=self._child_env())
         except subprocess.TimeoutExpired:
             raise JudgeUnavailable(self.name, f"{self._binary} timed out after {_TIMEOUT_SECONDS}s") from None
         except OSError as exc:
@@ -169,6 +193,7 @@ class CliJudge:
             "--output-format", "json",
             "--system-prompt", instructions,
             "--json-schema", json.dumps(model_cls.model_json_schema()),
+            *self._model_args(),
         ]
         result = self._run_subprocess(argv)
         if result.returncode != 0:
@@ -185,6 +210,7 @@ class CliJudge:
                 executable, "exec", "--skip-git-repo-check",
                 "--output-schema", str(schema_path),
                 "--output-last-message", str(out_path),
+                *self._model_args(),
                 combined_prompt,
             ]
             result = self._run_subprocess(argv)

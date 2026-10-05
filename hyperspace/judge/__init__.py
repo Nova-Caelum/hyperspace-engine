@@ -27,7 +27,7 @@ def get_judge(config: Config) -> Judge:
     if config.judge in ("openrouter", "anthropic"):
         return PydanticAIJudge(config.judge, model=config.model)
     if config.judge in ("claude-code", "codex"):
-        return CliJudge(config.judge)
+        return CliJudge(config.judge, model=config.model)
     raise ValueError(
         f"unknown judge {config.judge!r} — must be one of: openrouter, anthropic, claude-code, codex, none"
     )

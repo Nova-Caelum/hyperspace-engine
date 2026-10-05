@@ -288,10 +288,10 @@ def test_cli_judge_unparsable_output_raises_judge_unavailable(kind):
 
 
 def test_cli_judge_claude_envelope_with_result_field_is_unwrapped():
-    """`claude -p --output-format json` is known to wrap its answer in an
-    envelope (Decision.md); the exact field name is unverified at authoring
-    time (register A19), so both a `result` string and a bare object must
-    parse. This asserts the string-wrapped-JSON form."""
+    """`claude -p --output-format json --json-schema …` wraps its answer in an
+    envelope whose `result` is the answer's JSON as a string (register A19,
+    seen on a real call with claude 2.1.285, 2026-10-05). This asserts that
+    string-wrapped-JSON form."""
     captured: dict = {}
 
     def _run(argv, **kwargs):
@@ -302,6 +302,59 @@ def test_cli_judge_claude_envelope_with_result_field_is_unwrapped():
     cq, _ = asyncio.run(runner.judge_criteria("task statement", [_criterion()]))
     assert isinstance(cq, CriteriaJudgment)
     assert cq.acceptable is True
+
+
+# The model flag each CLI documents in its own `--help` (claude 2.1.285:
+# "--model <model> … an alias for the latest model (e.g. 'fable', 'opus', or
+# 'sonnet')"; codex-cli 0.145.0 `exec`: "-m, --model <MODEL>").
+_MODEL_FLAG = {"claude-code": "--model", "codex": "-m"}
+
+
+@pytest.mark.parametrize("kind", ["claude-code", "codex"])
+def test_cli_judge_passes_the_configured_model(kind):
+    captured: dict = {}
+    runner = CliJudge(kind, model="sonnet", run=_fake_run_ok(kind, _VALID_CQ_PAYLOAD, captured),
+                      which=_fake_which_present)
+    asyncio.run(runner.judge_criteria("task statement", [_criterion()]))
+    argv = captured["argv"]
+    flag = _MODEL_FLAG[kind]
+    assert flag in argv
+    assert argv[argv.index(flag) + 1] == "sonnet"
+
+
+@pytest.mark.parametrize("kind", ["claude-code", "codex"])
+def test_cli_judge_without_a_model_leaves_the_choice_to_the_cli(kind):
+    captured: dict = {}
+    runner = CliJudge(kind, run=_fake_run_ok(kind, _VALID_CQ_PAYLOAD, captured), which=_fake_which_present)
+    asyncio.run(runner.judge_criteria("task statement", [_criterion()]))
+    assert _MODEL_FLAG[kind] not in captured["argv"]
+
+
+@pytest.mark.parametrize("kind", ["claude-code", "codex"])
+def test_get_judge_hands_the_configured_model_to_the_cli_judge(kind):
+    assert get_judge(Config(judge=kind, model="sonnet")).model == "sonnet"
+    assert get_judge(Config(judge=kind)).model is None
+
+
+@pytest.mark.parametrize("kind", ["claude-code", "codex"])
+def test_cli_judge_child_gets_no_stdin_and_no_session_marker(kind, monkeypatch):
+    """Inside the engine's MCP server, stdin is the JSON-RPC pipe: a child
+    that inherits it can read the server's next request (observed: `claude
+    -p` waits 3 s on an inherited stdin). `CLAUDECODE` marks the calling
+    Claude Code session; the judge is a session of its own."""
+    monkeypatch.setenv("CLAUDECODE", "1")
+    monkeypatch.setenv("HYPERSPACE_TEST_KEPT", "yes")
+    captured: dict = {}
+
+    def _run(argv, **kwargs):
+        captured.update(kwargs)
+        return _fake_run_ok(kind, _VALID_CQ_PAYLOAD, {})(argv, **kwargs)
+
+    runner = CliJudge(kind, run=_run, which=_fake_which_present)
+    asyncio.run(runner.judge_criteria("task statement", [_criterion()]))
+    assert captured["stdin"] is subprocess.DEVNULL
+    assert "CLAUDECODE" not in captured["env"]
+    assert captured["env"]["HYPERSPACE_TEST_KEPT"] == "yes"
 
 
 # ── (g) graph coupling: a raising judge → unverifiable, criteria uncertain ──
