@@ -5,6 +5,10 @@ Code with evidence-bearing gates, a local SQLite task graph, a local closure ver
 localhost console. This file is for an agent changing the engine itself. If you are *using* the loop
 in your own project, the skills route you — start at `skills/acing-hyperspace/SKILL.md`, not here.
 
+This file lives at `.claude/CLAUDE.md`, which Claude Code loads as project memory in a checkout. Keep
+it out of the repository root: a `CLAUDE.md` at a plugin's root is not loaded as context for the
+plugin's users, and `claude plugin validate --strict .` fails on it.
+
 ## Precedence
 
 Code is truth. Skills own procedure. Docs own the machine.

@@ -147,5 +147,5 @@ reader can tell what is done from what is open:
   [`03_architecture.md`](03_architecture.md) and [`06_adaptation_notes.md`](06_adaptation_notes.md) are
   authoritative on the shape and on what changed.
 - **Generated reference set.** [`reference/`](reference/) with its drift test, per §8.
-- **Root `CLAUDE.md`.** So an adopter's own Claude Code session recognises a hyperspace-engine checkout
+- **`.claude/CLAUDE.md`.** So an adopter's own Claude Code session recognises a hyperspace-engine checkout
   and behaves correctly inside it.
