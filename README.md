@@ -171,7 +171,7 @@ uv run python -m pytest tests/ -q
 The same two commands work on macOS, Linux and Windows. The suite runs on all three in CI. CI also validates the plugin manifest in strict mode, runs the scan probes
 that keep the shipped tree free of private paths and names, and checks that the console bundle
 rebuilds byte for byte from its pinned source. Agents working in this repository should read
-[`CLAUDE.md`](CLAUDE.md) first.
+[`.claude/CLAUDE.md`](.claude/CLAUDE.md) first.
 
 ---
 

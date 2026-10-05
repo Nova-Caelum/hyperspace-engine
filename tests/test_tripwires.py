@@ -20,7 +20,7 @@ BIN_DIR = REPO_ROOT / "bin"
 
 
 def _iter_markdown_files() -> list[Path]:
-    files = [REPO_ROOT / "README.md", REPO_ROOT / "CLAUDE.md"]
+    files = [REPO_ROOT / "README.md", REPO_ROOT / ".claude" / "CLAUDE.md"]
     files += sorted((REPO_ROOT / "docs").rglob("*.md"))
     files += sorted((REPO_ROOT / "skills").rglob("*.md"))
     return [f for f in files if f.is_file()]
@@ -38,13 +38,13 @@ def _is_external(target: str) -> bool:
 
 class MarkdownLinkTests(unittest.TestCase):
     """docs/reference/tripwires.md row: 'Renaming a doc file cited by name
-    elsewhere' — every relative link in README.md, CLAUDE.md and docs/**/*.md
+    elsewhere' — every relative link in README.md, .claude/CLAUDE.md and docs/**/*.md
     must resolve to a real file (fragments and query strings stripped;
     absolute URLs and mailto: skipped)."""
 
     def test_every_relative_link_resolves(self) -> None:
         broken: list[str] = []
-        for md_file in [REPO_ROOT / "README.md", REPO_ROOT / "CLAUDE.md"] + sorted(
+        for md_file in [REPO_ROOT / "README.md", REPO_ROOT / ".claude" / "CLAUDE.md"] + sorted(
             (REPO_ROOT / "docs").rglob("*.md")
         ):
             text = md_file.read_text(encoding="utf-8")
@@ -185,7 +185,7 @@ class SkillNameReferenceTests(unittest.TestCase):
 class BinScriptReferenceTests(unittest.TestCase):
     """docs/reference/tripwires.md row: a skill's prose naming a bin/<script>
     it invokes. Every such mention across skills/, docs/, README.md and
-    CLAUDE.md must name a file that exists."""
+    .claude/CLAUDE.md must name a file that exists."""
 
     def test_every_bin_script_mention_resolves(self) -> None:
         sources = _iter_markdown_files()
@@ -231,3 +231,32 @@ class Docs07SetupMessageTests(unittest.TestCase):
             if m not in external and _longest_placeholder_free_segment(m) not in corpus
         ]
         self.assertEqual([], missing, "docs/07 §8 excerpts not found in their sources:\n" + "\n".join(missing))
+
+
+# ── the plugin root carries no CLAUDE.md ────────────────────────────────────
+
+_ROOT_CONTEXT_FILE = "claude.md"
+
+
+class PluginRootContextFileTests(unittest.TestCase):
+    """docs/reference/tripwires.md row: Claude Code 2.1.289+ warns that a
+    `CLAUDE.md` at a plugin's root "is not loaded as project context", and
+    CI's `claude plugin validate --strict .` turns that warning into a
+    failure. The contributor notes live at `.claude/CLAUDE.md`, which Claude
+    Code loads as project memory for anyone working in the checkout."""
+
+    def test_no_claude_md_at_the_plugin_root(self) -> None:
+        # Compare case-insensitively so macOS and Windows (case-insensitive
+        # file systems) and Linux agree on what counts as the same name.
+        found = sorted(p.name for p in REPO_ROOT.iterdir() if p.name.lower() == _ROOT_CONTEXT_FILE)
+        self.assertEqual(
+            [],
+            found,
+            "a CLAUDE.md at the plugin root fails `claude plugin validate --strict .`; "
+            "keep the contributor notes at .claude/CLAUDE.md",
+        )
+
+    def test_contributor_notes_live_in_dot_claude(self) -> None:
+        notes = REPO_ROOT / ".claude" / "CLAUDE.md"
+        self.assertTrue(notes.is_file(), "the contributor notes must exist at .claude/CLAUDE.md")
+        self.assertIn("Hyperspace Engine", notes.read_text(encoding="utf-8"))
