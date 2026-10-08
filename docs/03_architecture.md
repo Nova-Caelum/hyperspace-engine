@@ -88,7 +88,7 @@ where a run is and whether it may move.
 | `loop_state.schema.json` | The state file's shape. Fields in [`reference/state-fields.md`](reference/state-fields.md). |
 | `node_gates.py` | The exit checks, one per gated node, registered in `CHECKS`. Reads evidence; never writes state. Contracts in [`reference/gate-contracts.md`](reference/gate-contracts.md). |
 | `loop_terminal.py` | The status vocabulary and the ending predicate. Values in [`reference/status-vocabulary.md`](reference/status-vocabulary.md). |
-| `drive_map.py` | The run folder's schema and its generated `DRIVE_MAP.md`, rewritten at every node entry and gate. |
+| `drive_map.py` | The run folder's schema and its generated `DRIVE_MAP.md`, rewritten at every node entry and gate; and a `tree` mode that maps a whole project under its `.drivemap.toml`. |
 | `plan_lint.py` | A plan author's self-check. Not a gate. |
 | `validate_candidate.py` | Validates a `tests.json` against the acceptance contract before the Understand gate runs. Shares the gate's contract loader, so the two cannot disagree. |
 | `hyperspace_setup.py` | The setup skill's bootstrap: puts the plugin root on `sys.path` and runs the stdlib-only `hyperspace.setup` entry point, before `.hyperspace/env` exists. One command form for every shell. |

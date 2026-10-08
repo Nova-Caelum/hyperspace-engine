@@ -128,9 +128,9 @@ Record who was driving at this approval (SystemShape §11.8).
 | `--human-present` | yes | true\|false — was a human present at this approval |
 | `--authority` | yes | who holds authority to drive |
 
-## `bin/drive_map.py` — the run folder's generated map
+## `bin/drive_map.py` — the generated drive maps (a run folder, or a whole project)
 
-`drive_map.py <command> <run_dir>`
+`drive_map.py <command> <folder>`
 
 Run-folder schema + drive map for hyperspace runs.
 
@@ -145,6 +145,16 @@ Run-folder schema + drive map for hyperspace runs.
 | Argument | Required | Notes |
 |---|---|---|
 | `run_dir` | yes |  |
+
+### `tree`
+
+map a whole project folder
+
+| Argument | Required | Notes |
+|---|---|---|
+| `root` | yes |  |
+| `--out` | yes | the map file to write |
+| `--config` | no | settings file (default: <root>/.drivemap.toml) |
 
 ## `bin/plan_lint.py` — plan self-check (not a gate)
 
