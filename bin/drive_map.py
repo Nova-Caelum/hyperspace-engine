@@ -19,8 +19,16 @@ under "Outside the schema" in the map and echoed to stderr, but nothing is
 refused — runs opened before this file existed have untidy roots and must not
 be blocked by it.
 
+A second mode maps a whole project rather than one run: `tree <root> --out <file>`
+walks <root> under the settings in `<root>/.drivemap.toml` (`exclude`, `cutoff`,
+`max_depth`, `budget`) and writes a map an agent reads before it creates a file.
+It follows the same rule: text after the dash on a line is yours and survives
+regeneration. Details at the `tree mode` section below.
+
 CLI:  drive_map.py write <run-dir>   create missing schema folders, (re)write the map
       drive_map.py check <run-dir>   exit 0 if the map matches the disk, 1 if not
+      drive_map.py tree <root> --out <file> [--config <toml>]
+                                     map a whole project, honouring .drivemap.toml
 """
 from __future__ import annotations
 
@@ -28,6 +36,8 @@ import argparse
 import os
 import re
 import sys
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 
 MAP_FILENAME = "DRIVE_MAP.md"
@@ -90,7 +100,7 @@ COLLAPSE_OVER = 40
 
 _MAP_LINE = re.compile(r"^- `(?P<path>[^`]+)`(?: — (?P<desc>.*))?$")
 _FULL_MAP_HEADING = "## Full map"
-_COUNT_NOTE = re.compile(r"^\(\d+ files, not listed\)\s*")
+_COUNT_NOTE = re.compile(r"^\(\d+\+? files?, not listed\)\s*")
 
 
 # ---- walking ---------------------------------------------------------------
@@ -132,14 +142,14 @@ def outside_schema(tree: dict[str, list[str]]) -> list[str]:
 
 
 # ---- rendering ---------------------------------------------------------------
-def _existing_descriptions(map_path: Path) -> dict[str, str]:
+def _existing_descriptions(map_path: Path, heading: str = _FULL_MAP_HEADING) -> dict[str, str]:
     if not map_path.is_file():
         return {}
     found: dict[str, str] = {}
     in_full = False
     for line in map_path.read_text(encoding="utf-8").splitlines():
         if line.startswith("## "):
-            in_full = line.strip() == _FULL_MAP_HEADING
+            in_full = line.strip() == heading
             continue
         match = _MAP_LINE.match(line) if in_full else None
         desc = _COUNT_NOTE.sub("", match.group("desc") or "").strip() if match else ""
@@ -206,6 +216,321 @@ def render(run_dir: Path) -> str:
     return "\n".join(out) + "\n"
 
 
+# ---- tree mode: a whole project ------------------------------------------------
+# `drive_map.py tree <root> --out <file>` maps a project folder so an agent can
+# see where things already live before it creates a file. Settings come from
+# `<root>/.drivemap.toml` (optional); every key has a default.
+#
+#   exclude    globs never listed, never counted
+#   cutoff     globs listed as ONE line with a file count, never descended
+#   max_depth  levels below <root> that are listed (default 3); a folder at the
+#              limit is a cutoff line
+#   budget     lines the whole map may take (default 400); over it, the deepest
+#              levels collapse to cutoff lines first and the top of the map says so
+#
+# Globs: a pattern with no "/" matches a file or folder NAME at any depth
+# ("*.log", "dist"); one with a "/" matches the path from <root> ("docs/draft-*",
+# "runs/*"), where "**" crosses folders ("**/_old"). The tree is walked once;
+# excluded folders are never entered, and a cutoff folder is only counted, up to
+# COUNT_CAP files, so a huge one costs the same as a small one. The totals in the
+# header count what the walk saw (a cutoff folder is one folder plus its count),
+# not the lines shown.
+
+CONFIG_FILENAME = ".drivemap.toml"
+TREE_HEADING = "## Tree"
+DEFAULT_EXCLUDE: tuple[str, ...] = (".*", "dist", "build")
+DEFAULT_MAX_DEPTH = 3
+DEFAULT_BUDGET = 400
+MIN_BUDGET = 12
+COUNT_CAP = 5000
+_CONFIG_KEYS = ("exclude", "cutoff", "max_depth", "budget")
+
+
+@dataclass(frozen=True)
+class TreeConfig:
+    exclude: tuple[str, ...] = DEFAULT_EXCLUDE
+    cutoff: tuple[str, ...] = ()
+    max_depth: int = DEFAULT_MAX_DEPTH
+    budget: int = DEFAULT_BUDGET
+
+
+@dataclass
+class TreeResult:
+    text: str
+    folders: int
+    files: int
+    lines: int
+    level: int  # deepest level shown; below the configured max_depth when the map was over budget
+    path: Path | None = None  # set once written
+
+
+def load_tree_config(root: Path | str, config_path: Path | str | None = None) -> TreeConfig:
+    """Settings from `config_path` (default `<root>/.drivemap.toml`). Absent file: defaults.
+    Raises ValueError naming the file and the key when a value is unusable."""
+    path = Path(config_path) if config_path else Path(root) / CONFIG_FILENAME
+    if not path.is_file():
+        return TreeConfig()
+    import tomllib  # Python 3.11+; imported here so run-folder mode never needs it
+
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
+        raise ValueError(f"{path.name} cannot be read: {exc}") from exc
+    unknown = sorted(set(data) - set(_CONFIG_KEYS))
+    if unknown:
+        print(f"drive map: {path.name} has keys it does not use: {', '.join(unknown)}", file=sys.stderr)
+
+    def globs(key: str, default: tuple[str, ...]) -> tuple[str, ...]:
+        value = data.get(key, default)
+        if not isinstance(value, (list, tuple)) or not all(isinstance(v, str) for v in value):
+            raise ValueError(f"{path.name}: `{key}` must be a list of strings")
+        return tuple(value)
+
+    def whole(key: str, default: int, floor: int) -> int:
+        value = data.get(key, default)
+        if isinstance(value, bool) or not isinstance(value, int) or value < floor:
+            raise ValueError(f"{path.name}: `{key}` must be a whole number, {floor} or more")
+        return value
+
+    return TreeConfig(
+        exclude=globs("exclude", DEFAULT_EXCLUDE),
+        cutoff=globs("cutoff", ()),
+        max_depth=whole("max_depth", DEFAULT_MAX_DEPTH, 1),
+        budget=whole("budget", DEFAULT_BUDGET, MIN_BUDGET),
+    )
+
+
+class _Globs:
+    """A list of path globs, matched against a name (no "/" in the pattern) or the path from the root."""
+
+    def __init__(self, patterns: tuple[str, ...]):
+        self._by_name: list[re.Pattern[str]] = []
+        self._by_path: list[re.Pattern[str]] = []
+        for pattern in patterns:
+            body = pattern.replace("\\", "/")
+            anchored = "/" in body.rstrip("/")
+            body = body.strip("/")
+            if body:
+                (self._by_path if anchored else self._by_name).append(re.compile(self._regex(body)))
+
+    @staticmethod
+    def _regex(body: str) -> str:
+        out, i = [], 0
+        while i < len(body):
+            if body.startswith("**/", i):
+                out.append("(?:.*/)?")
+                i += 3
+            elif body.startswith("**", i):
+                out.append(".*")
+                i += 2
+            elif body[i] == "*":
+                out.append("[^/]*")
+                i += 1
+            elif body[i] == "?":
+                out.append("[^/]")
+                i += 1
+            else:
+                out.append(re.escape(body[i]))
+                i += 1
+        return "".join(out)
+
+    def match(self, name: str, rel: str) -> bool:
+        return any(r.fullmatch(name) for r in self._by_name) or any(r.fullmatch(rel) for r in self._by_path)
+
+
+@dataclass
+class _Dir:
+    rel: str  # posix path from the root, "" for the root itself
+    depth: int  # 0 for the root
+    files: list[str] = field(default_factory=list)
+    dirs: list["_Dir"] = field(default_factory=list)
+    cut: bool = False  # a cutoff or the depth limit: counted, never listed inside
+    count: int = 0  # files inside, for a cut folder
+    capped: bool = False  # the count stopped at COUNT_CAP
+
+
+def _join(rel: str, name: str) -> str:
+    return f"{rel}/{name}" if rel else name
+
+
+def _visible(path: str, rel: str, exclude: _Globs) -> list[tuple[os.DirEntry, str]]:
+    """(entry, its path from the root) for what `path` holds that is neither ignored nor excluded."""
+    try:
+        with os.scandir(path) as it:
+            found = [(e, _join(rel, e.name)) for e in it]
+    except OSError:
+        return []  # unreadable: shown as empty rather than failing the map
+    return [(e, child) for e, child in found if e.name not in IGNORED_NAMES and not exclude.match(e.name, child)]
+
+
+def _count_files(path: str, rel: str, exclude: _Globs) -> tuple[int, bool]:
+    """Files under `path`, honouring exclude, stopping at COUNT_CAP."""
+    total, stack = 0, [(path, rel)]
+    while stack:
+        for entry, child in _visible(*stack.pop(), exclude):
+            if entry.is_dir(follow_symlinks=False):
+                stack.append((entry.path, child))
+            else:
+                total += 1
+                if total >= COUNT_CAP:
+                    return COUNT_CAP, True
+    return total, False
+
+
+def _scan(path: str, rel: str, depth: int, cfg: TreeConfig, exclude: _Globs, cutoff: _Globs) -> _Dir:
+    node = _Dir(rel, depth)
+    for entry, child in sorted(_visible(path, rel, exclude), key=lambda ec: (ec[0].name.casefold(), ec[0].name)):
+        if not entry.is_dir(follow_symlinks=False):  # a symlinked folder is a plain entry, never followed
+            node.files.append(entry.name)
+            continue
+        sub = _Dir(child, depth + 1)
+        if depth + 1 >= cfg.max_depth or cutoff.match(entry.name, child):
+            sub.cut = True
+            sub.count, sub.capped = _count_files(entry.path, child, exclude)
+        else:
+            sub = _scan(entry.path, child, depth + 1, cfg, exclude, cutoff)
+        node.dirs.append(sub)
+    return node
+
+
+def _inside(node: _Dir) -> tuple[int, bool]:
+    """(files in this folder and everything below it, whether any count was capped)."""
+    if node.cut:
+        return node.count, node.capped
+    total, capped = len(node.files), False
+    for sub in node.dirs:
+        n, c = _inside(sub)
+        total, capped = total + n, capped or c
+    return total, capped
+
+
+def _folders(node: _Dir) -> int:
+    return sum(1 + (0 if sub.cut else _folders(sub)) for sub in node.dirs)
+
+
+def _add_file(root: _Dir, rel: str) -> None:
+    """List `rel` (the map's own file) in its folder when that folder is listed and the file is not."""
+    *parents, name = rel.split("/")
+    node = root
+    for i in range(len(parents)):
+        wanted = "/".join(parents[: i + 1])
+        found = next((d for d in node.dirs if d.rel == wanted and not d.cut), None)
+        if found is None:
+            return
+        node = found
+    if name not in node.files:
+        node.files = sorted([*node.files, name], key=lambda n: (n.casefold(), n))
+
+
+def _tree_line(path: str, descriptions: dict[str, str]) -> str:
+    desc = descriptions.get(path)
+    return f"- `{path}` — {desc}" if desc else f"- `{path}`"
+
+
+def _count(n: int, noun: str, capped: bool = False) -> str:
+    return f"{n}{'+' if capped else ''} {noun}{'' if n == 1 else 's'}"
+
+
+def _cut_line(node: _Dir, descriptions: dict[str, str]) -> str:
+    n, capped = _inside(node)
+    path = f"{node.rel}/"
+    note = descriptions.get(path)
+    return f"- `{path}` — ({_count(n, 'file', capped)}, not listed)" + (f" {note}" if note else "")
+
+
+def _tree_lines(node: _Dir, limit: int, descriptions: dict[str, str]) -> list[str]:
+    out = [_tree_line(_join(node.rel, f), descriptions) for f in node.files]
+    for sub in node.dirs:
+        if sub.cut or sub.depth >= limit:
+            out.append(_cut_line(sub, descriptions))
+        else:
+            out.append(_tree_line(f"{sub.rel}/", descriptions))
+            out += _tree_lines(sub, limit, descriptions)
+    return out
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+
+def render_tree(
+    root: Path | str,
+    cfg: TreeConfig | None = None,
+    descriptions: dict[str, str] | None = None,
+    own_file: str | None = None,
+) -> TreeResult:
+    """The map for `root`: its text and numbers. `own_file` is the map's path from
+    `root` when it lives inside it, so the map lists itself the first time too."""
+    root = Path(root).resolve()
+    if not root.is_dir():
+        raise NotADirectoryError(f"not a folder: {root}")
+    cfg = cfg or load_tree_config(root)
+    descriptions = descriptions or {}
+    exclude = _Globs(cfg.exclude)
+    tree = _scan(str(root), "", 0, cfg, exclude, _Globs(cfg.cutoff))
+    if own_file and not exclude.match(own_file.rsplit("/", 1)[-1], own_file):
+        _add_file(tree, own_file)
+    n_files, capped = _inside(tree)
+    n_folders = _folders(tree)
+
+    def header(note: list[str]) -> list[str]:
+        return [
+            f"# Drive map — {root.name}",
+            "",
+            "> Generated by `drive_map.py tree`, rewritten each time it runs (normally at session start). "
+            "Never hand-edit a path. The text after the dash on any line under **Tree** is yours: "
+            "write it once and it is kept.",
+            f"> Generated {_now()}. **{_count(n_folders, 'folder')}, {_count(n_files, 'file', capped)}** "
+            f"under `{root.name}/`.",
+            f"> Depth {cfg.max_depth}, budget {cfg.budget} lines. Change those, and what is excluded or "
+            f"cut off, in `{CONFIG_FILENAME}`.",
+            *note,
+            "",
+            TREE_HEADING,
+            "",
+        ]
+
+    level, note = cfg.max_depth, []
+    while True:
+        body = _tree_lines(tree, level, descriptions) or ["- nothing here yet"]
+        if len(header(note)) + len(body) <= cfg.budget or level <= 1:
+            break
+        level -= 1
+        note = [
+            f"> **Over budget:** listing every level would pass {cfg.budget} lines, so the map stops at level "
+            f"{level}: a folder at that level shows its file count instead of its contents. "
+            f"Raise `budget` in `{CONFIG_FILENAME}` to see more."
+        ]
+    room = cfg.budget - len(header(note))
+    if len(body) > room:  # one flat folder, or one huge root: a hard ceiling, said plainly
+        hidden = len(body) - (room - 1)
+        note = [f"> **Over budget:** {hidden} more lines are not listed. Raise `budget` in `{CONFIG_FILENAME}`."]
+        body = [*body[: room - 1], f"- … {hidden} more lines, not listed"]
+    lines = [*header(note), *body]
+    return TreeResult("\n".join(lines) + "\n", n_folders, n_files, len(lines), level)
+
+
+def write_tree(root: Path | str, out: Path | str, config_path: Path | str | None = None) -> TreeResult:
+    """Walk `root`, write the map to `out`, keep the text people wrote after the dash."""
+    root, shown = Path(root).resolve(), Path(out)
+    out = shown.resolve()
+    cfg = load_tree_config(root, config_path)
+    try:
+        own = out.relative_to(root).as_posix()
+    except ValueError:
+        own = None
+    out.parent.mkdir(parents=True, exist_ok=True)  # before the walk, so a first map already lists its own folder
+    result = render_tree(root, cfg, _existing_descriptions(out, TREE_HEADING), own)
+    partial = out.with_name(out.name + ".part")
+    try:
+        partial.write_text(result.text, encoding="utf-8")
+        os.replace(partial, out)  # a reader never sees half a map
+    finally:
+        partial.unlink(missing_ok=True)
+    result.path = shown
+    return result
+
+
 # ---- operations -----------------------------------------------------------------
 def write(run_dir: Path | str) -> list[str]:
     """Create missing schema folders, rewrite the map. Returns outside-schema paths."""
@@ -250,14 +575,22 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="cmd", required=True)
     for name in ("write", "check"):
         sub.add_parser(name).add_argument("run_dir")
+    tree = sub.add_parser("tree", help="map a whole project folder")
+    tree.add_argument("root")
+    tree.add_argument("--out", required=True, help="the map file to write")
+    tree.add_argument("--config", help=f"settings file (default: <root>/{CONFIG_FILENAME})")
     args = parser.parse_args(argv)
     try:
+        if args.cmd == "tree":
+            done = write_tree(args.root, args.out, args.config)
+            print(f"wrote {done.path} ({done.folders} folders, {done.files} files, {done.lines} lines)")
+            return 0
         if args.cmd == "write":
             report_stray(write(args.run_dir))
             print(f"wrote {Path(args.run_dir) / MAP_FILENAME}")
             return 0
         problems = check(args.run_dir)
-    except OSError as exc:
+    except (OSError, ValueError) as exc:
         print(f"drive map: {exc}", file=sys.stderr)
         return 2
     for problem in problems:

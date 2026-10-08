@@ -209,7 +209,7 @@ def render_cli() -> str:
         "",
     ]
     _render_parser("`bin/loop_state.py` — the run-state machine", "loop_state.py <command> …", loop_state.build_parser(), lines)
-    _render_parser("`bin/drive_map.py` — the run folder's generated map", "drive_map.py <command> <run_dir>",
+    _render_parser("`bin/drive_map.py` — the generated drive maps (a run folder, or a whole project)", "drive_map.py <command> <folder>",
                    _capture_parser(lambda: drive_map.main([])), lines)
     _render_parser("`bin/plan_lint.py` — plan self-check (not a gate)", "plan_lint.py …", plan_lint._parser(), lines)
 

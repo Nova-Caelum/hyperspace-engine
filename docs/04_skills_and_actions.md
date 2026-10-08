@@ -116,6 +116,7 @@ Nothing leaves the machine.
 |---|---|
 | `drive_map.py write <run_dir>` | Regenerate `DRIVE_MAP.md`. Called automatically at every node entry and every gate. |
 | `drive_map.py check <run_dir>` | Report stray files — anything in the run folder the schema does not place. |
+| `drive_map.py tree <root> --out <file>` | Map a whole project folder for an agent to read before it creates a file. Settings in `<root>/.drivemap.toml`: `exclude`, `cutoff` (one line with a file count, never listed inside), `max_depth` (3), `budget` (400 lines). Text after the dash on a line survives regeneration. |
 | `plan_lint.py <plan>` | Lint a plan's markdown. **A self-check, not a gate** — the Draft gate deliberately applies no lint rule. |
 
 ---
