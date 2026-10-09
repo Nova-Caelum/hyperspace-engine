@@ -77,6 +77,10 @@ environment, store, judge, console port).
 
 ## How the loop works
 
+<p align="center">
+  <img src="docs/hyperspace-workflow.png" alt="The Hyperspace workflow: Understand, Decide, Draft and Build each pass through a numbered check before Use it live, under a Verification machinery band that combines Deterministic checks and Intelligent judgment" width="100%">
+</p>
+
 | Station | Enters when | Leaves with |
 |---|---|---|
 | `gear2-understand` | A goal nobody has framed | A frozen tests file — what "done" means, fixed before anything is built |
