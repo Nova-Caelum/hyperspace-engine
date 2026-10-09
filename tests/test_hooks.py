@@ -125,6 +125,15 @@ def _python_shim(path: Path, marker: Path | None = None) -> Path:
     return _write_shim(path, f'{record}exec "{Path(sys.executable).as_posix()}" "$@"\n')
 
 
+def _planted_interpreter(env_dir: Path, marker: Path) -> None:
+    """What a downloaded folder can ship at `.hyperspace/env`: an interpreter in
+    either venv layout that records it was started and exits 0 — the exit status
+    a probe for "is this Python 3.11+?" accepts. Nothing in a session may start it."""
+    body = f'echo "started: $0 $*" >> "{marker.as_posix()}"\nexit 0\n'
+    _write_shim(env_dir / "bin" / "python", body)
+    _write_shim(env_dir / "Scripts" / "python.exe", body)
+
+
 def _store_placeholder(path: Path) -> Path:
     """What `python3` on a fresh Windows PATH often is: the Microsoft Store
     App Execution Alias — prints an install prompt, exits 9009, runs nothing."""
@@ -402,16 +411,6 @@ class ActiveRunAndBudgetTests(HookHarness):
         self.assertIn("fresh_sessions: 2>1", result.stdout)
         self.assertIn("soft cap crossed", result.stdout)
 
-    def test_bump_and_notify_also_work_via_project_hyperspace_env_python(self) -> None:
-        state_path = self.init_run("env-goal")
-        marker = self.tmp_path / "env-python-used"
-        _python_shim(self.project_dir / ".hyperspace" / "env" / "bin" / "python", marker)
-        result = self.run_hook(source="startup", path_dirs=[])
-        self.assertRan(result)
-        self.assertEqual(1, self.fresh_sessions_used(state_path))
-        self.assertIn("goal=env-goal", result.stdout)
-        self.assertTrue(marker.is_file(), "the project env's interpreter was not the one used")
-
 
 # (e), (f) --------------------------------------------------------------
 
@@ -516,31 +515,67 @@ class InterpreterResolutionTests(HookHarness):
     printing any path: with no other Python on PATH, the active-run line only
     appears if the expected interpreter ran."""
 
-    def test_real_provisioned_env_is_used_with_nothing_on_path(self) -> None:
-        """A genuine venv in this OS's own layout, linked the way provisioning
-        links it (a junction on Windows, nothing to do on POSIX)."""
+    def test_the_project_env_is_never_the_interpreter(self) -> None:
+        """Security (project interpreter, finding D). A folder can ship a file at
+        `.hyperspace/env/bin/python`; the hook runs on every SessionStart in every
+        folder, so it must not start that file. The computer's own Python runs
+        the Python half instead, and the hook still prints what it always did."""
+        state_path = self.init_run("planted-goal")
+        marker = self.tmp_path / "planted-interpreter-started"
+        _planted_interpreter(self.project_dir / ".hyperspace" / "env", marker)
+        result = self.run_hook(source="startup")
+        self.assertRan(result)
+        self.assertFalse(
+            marker.exists(),
+            "the project's own interpreter was started:\n" + (marker.read_text() if marker.exists() else ""),
+        )
+        self.assertIn("goal=planted-goal", result.stdout)
+        self.assertEqual(1, self.fresh_sessions_used(state_path))
+        delivered, begin_count, end_count = _extract_delivered_block(result.stdout)
+        self.assertEqual((1, 1), (begin_count, end_count))
+        self.assertEqual(_expected_primer_body(), delivered)
+
+    def test_without_a_system_python_the_hook_degrades_and_still_never_starts_the_project_env(self) -> None:
+        self.init_run("no-system-python-goal")
+        marker = self.tmp_path / "planted-interpreter-started"
+        _planted_interpreter(self.project_dir / ".hyperspace" / "env", marker)
+        result = self.run_hook(source="startup", path_dirs=[])
+        self.assertRan(result)
+        self.assertFalse(marker.exists(), "the project's own interpreter was started as a last resort")
+        self.assertNotIn("goal=no-system-python-goal", result.stdout)
+        self.assertIn("No Python 3.11+ found (tried python3, python, py -3, python3.13/.12/.11)", result.stdout)
+        self.assertNotIn("project environment", result.stdout)
+        delivered, begin_count, end_count = _extract_delivered_block(result.stdout)
+        self.assertEqual((1, 1), (begin_count, end_count))
+
+    def test_a_real_provisioned_env_is_not_used_either(self) -> None:
+        """The refusal is of the location, not of a file that looks fake: a genuine
+        venv under `.hyperspace/env` is just as much the folder's, and the hook has
+        no use for it (session_start.py is stdlib-only)."""
         state_path = self.init_run("real-env-goal")
         _real_env(self.project_dir / ".hyperspace" / "env")
         result = self.run_hook(source="startup", path_dirs=[])
         self.assertRan(result)
-        self.assertIn("goal=real-env-goal", result.stdout)
-        self.assertEqual(1, self.fresh_sessions_used(state_path))
+        self.assertNotIn("goal=real-env-goal", result.stdout)
+        self.assertEqual(0, self.fresh_sessions_used(state_path))
+        self.assertIn("No Python 3.11+ found", result.stdout)
         self.assertNotIn("MCP server cannot start", result.stdout)
 
-    def test_windows_scripts_layout_without_the_bin_link_is_still_used(self) -> None:
-        """An env whose `bin` link is missing still runs the hook's Python
-        half from `Scripts/python.exe` — while the hook says the MCP server
-        (which needs `env/bin/python`) cannot start."""
+    def test_windows_scripts_layout_is_not_used_either(self) -> None:
+        """An env with only `Scripts/python.exe` (no `bin` link) is passed over as
+        well; the MCP-server warning, which is about `env/bin/python` existing,
+        is unchanged."""
         state_path = self.init_run("scripts-goal")
-        env_dir = self.project_dir / ".hyperspace" / "env"
-        if IS_WINDOWS:
-            _real_env(env_dir, link=False)
-        else:
-            _python_shim(env_dir / "Scripts" / "python.exe")
+        marker = self.tmp_path / "scripts-interpreter-started"
+        _write_shim(
+            self.project_dir / ".hyperspace" / "env" / "Scripts" / "python.exe",
+            f'echo started >> "{marker.as_posix()}"\nexit 0\n',
+        )
         result = self.run_hook(source="startup", path_dirs=[])
         self.assertRan(result)
-        self.assertIn("goal=scripts-goal", result.stdout)
-        self.assertEqual(1, self.fresh_sessions_used(state_path))
+        self.assertFalse(marker.exists())
+        self.assertNotIn("goal=scripts-goal", result.stdout)
+        self.assertEqual(0, self.fresh_sessions_used(state_path))
         self.assertIn("MCP server cannot start", result.stdout)
 
     def test_microsoft_store_placeholder_is_skipped_not_trusted(self) -> None:
@@ -569,6 +604,40 @@ class InterpreterResolutionTests(HookHarness):
         self.assertRan(result)
         self.assertIn("goal=py-goal", result.stdout)
         self.assertEqual(1, self.fresh_sessions_used(state_path))
+
+    def test_a_versioned_python_on_path_is_used_when_python3_is_too_old(self) -> None:
+        """macOS ships a 3.9 `python3`; uv links only `python3.12`. The hook must
+        still find a 3.11+ Python and print the active-run block."""
+        state_path = self.init_run("versioned-goal")
+        _write_shim(self.tmp_path / "old-bin" / "python3", "exit 1\n")  # 3.9: fails the >= 3.11 probe
+        _python_shim(self.tmp_path / "new-bin" / "python3.12")
+        result = self.run_hook(source="startup", path_dirs=[self.tmp_path / "old-bin", self.tmp_path / "new-bin"])
+        self.assertRan(result)
+        self.assertIn("goal=versioned-goal", result.stdout)
+        self.assertEqual(1, self.fresh_sessions_used(state_path))
+        self.assertNotIn("No Python 3.11+ found", result.stdout)
+
+    def test_a_versioned_python_in_home_local_bin_is_used_though_it_is_not_on_path(self) -> None:
+        """uv's links live in ~/.local/bin, which a hook's PATH may lack. Found by
+        explicit path (a user-owned folder), and still never the project's env."""
+        state_path = self.init_run("home-goal")
+        marker = self.tmp_path / "planted-interpreter-started"
+        _planted_interpreter(self.project_dir / ".hyperspace" / "env", marker)
+        _python_shim(self.home / ".local" / "bin" / "python3.12")
+        result = self.run_hook(source="startup", path_dirs=[])
+        self.assertRan(result)
+        self.assertFalse(marker.exists(), "the project's own interpreter was started")
+        self.assertIn("goal=home-goal", result.stdout)
+        self.assertEqual(1, self.fresh_sessions_used(state_path))
+
+    def test_a_versioned_python_that_is_too_old_is_skipped_too(self) -> None:
+        self.init_run("old-versioned-goal")
+        _write_shim(self.tmp_path / "old-bin" / "python3.11", "exit 1\n")
+        _write_shim(self.home / ".local" / "bin" / "python3.13", "exit 1\n")
+        result = self.run_hook(source="startup", path_dirs=[self.tmp_path / "old-bin"])
+        self.assertRan(result)
+        self.assertNotIn("goal=old-versioned-goal", result.stdout)
+        self.assertIn("No Python 3.11+ found", result.stdout)
 
     def test_too_old_python_is_skipped(self) -> None:
         self.init_run("old-goal")
@@ -658,6 +727,20 @@ class PythonHalfTests(HookHarness):
         self.assertIn("row-summary", module.render(self.project_dir, REPO_ROOT, "resume"))
         self.write_config('worklog_owner = "some-other-tool"\n')
         self.assertNotIn("row-summary", module.render(self.project_dir, REPO_ROOT, "resume"))
+
+    def test_the_python_half_needs_only_the_standard_library(self) -> None:
+        """The hook runs with the computer's own Python (never the project's env),
+        which has none of this project's packages. `-S` drops site-packages, so
+        this is that Python: if the import chain ever needs a package, `bump`
+        is skipped (loop_state fails to import) and the counter stays at 0."""
+        state_path = self.init_run("stdlib-goal")
+        result = subprocess.run(
+            [sys.executable, "-S", str(HOOK_PY_PATH), str(self.project_dir), str(REPO_ROOT), "startup"],
+            capture_output=True, encoding="utf-8", timeout=60, check=False,
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("goal=stdlib-goal", result.stdout)
+        self.assertEqual(1, self.fresh_sessions_used(state_path))
 
     def test_render_accepts_backslash_and_forward_slash_paths_alike(self) -> None:
         module = _load_session_start()
