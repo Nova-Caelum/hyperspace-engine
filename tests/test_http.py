@@ -245,6 +245,51 @@ def test_mcp_upsert_work_item(running_door):
     assert result["row"]["external_id"] == "demo-project:wi-2"
 
 
+def _call_upsert(door, arguments: dict, req_id: int = 10):
+    status, data = _post_mcp(door, {
+        "jsonrpc": "2.0", "id": req_id, "method": "tools/call",
+        "params": {"name": "upsert_work_item", "arguments": arguments},
+    })
+    assert status == 200
+    return data["result"]
+
+
+def test_mcp_upsert_work_item_create_done_closes_as_console(running_door):
+    """The console's HTTP door is the one door that still accepts a person's
+    `state="done"` — stamped `hyperspace-console`, readable back over GET."""
+    result = _call_upsert(running_door, _candidate(
+        external_id="demo-project:wi-done", idempotency_key="wi-done-create", state="done",
+    ))
+    assert "isError" not in result
+    row = json.loads(result["content"][0]["text"])["row"]
+    assert row["state"] == "done"
+    assert row["completed_by"] == "hyperspace-console"
+
+    status, _ctype, body = _get(running_door, f"/api/work-items/{row['id']}")
+    assert status == 200
+    assert json.loads(body)["completed_by"] == "hyperspace-console"
+
+
+def test_mcp_upsert_work_item_update_done_closes_as_console(running_door, seeded_store_path):
+    _db, seed_row = seeded_store_path  # `demo-project:wi-1`, filed with state=None
+    result = _call_upsert(running_door, _candidate(idempotency_key="wi-1-done", state="done"))
+    assert "isError" not in result
+    row = json.loads(result["content"][0]["text"])["row"]
+    assert row["id"] == seed_row["id"]
+    assert row["state"] == "done"
+    assert row["completed_by"] == "hyperspace-console"
+
+
+def test_mcp_door_label_cannot_be_chosen_by_the_request_body(running_door):
+    for field, value in (("completed_by", "hyperspace-verifier"), ("console", False), ("door", "agent")):
+        result = _call_upsert(running_door, {**_candidate(
+            external_id="demo-project:wi-spoof", idempotency_key="wi-spoof-create", state="done",
+        ), field: value})
+        assert result["isError"] is True, field
+    status, _ctype, _body = _get(running_door, "/api/work-items/demo-project:wi-spoof")
+    assert status == 404
+
+
 def test_mcp_tool_error_is_iserror(running_door):
     # Missing acceptance_criteria -> ToolError("validation", ...) inside
     # call_tool, which call_tool itself wraps into {"error": {...}} —

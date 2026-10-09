@@ -203,6 +203,14 @@ says otherwise.
 
 ---
 
+## 9. A tool refused `state="done"`
+
+| Message | Means | Do |
+|---|---|---|
+| `state="done" is not accepted through upsert_work_item. Close the row with complete_workitem on this same hyperspace server … or ask the user to close the task in the console. Nothing was written.` | `upsert_work_item` never writes `done` for an agent — on a new row or an existing one. The refusal comes before any write, so the row is exactly as it was. | Run `complete_workitem` for the row: it checks the change on disk and flips the row itself. If it cannot decide (`unverifiable`), or the row needs a person's judgment, hand the closure to the user. Do not retry `upsert_work_item` with `done`, and do not call the loopback door directly: that closes the row under the console's label without anyone having looked. |
+
+---
+
 | | |
 |---|---|
 | **What each gate checks** | [`02_the_loop_and_gates.md`](02_the_loop_and_gates.md) |
