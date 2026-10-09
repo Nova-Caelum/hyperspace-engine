@@ -234,18 +234,20 @@ class Docs07SetupMessageTests(unittest.TestCase):
         self.assertEqual([], missing, "docs/07 §8 excerpts not found in their sources:\n" + "\n".join(missing))
 
 
-# ── (d) only the HTTP route may call the tool table as the console ──────────
+# ── (d) only the HTTP routes may write as the console ────────────────────────
 
 
 class ConsoleDoorCallerTests(unittest.TestCase):
-    """docs/reference/tripwires.md row: the console door of `call_tool`. The
-    door that wrote a `done` is decided by the code path, so the one caller
-    that passes `console=` must be `http/routes.py::route_mcp`. A second
-    caller (the stdio MCP server, a new transport) would hand agents the
-    console's label. AST, not grep: docstrings that mention `console=True`
-    are not callers."""
+    """docs/reference/tripwires.md row: the console door. The door that wrote a
+    `done` is decided by the code path, so the only code that may write as the
+    console is `http/routes.py`: `route_mcp` (the one caller that passes
+    `console=` to `call_tool`) and `route_patch` (the one caller of
+    `console_patch_work_item`). A second caller (the stdio MCP server, a new
+    transport) would hand agents the console's label. AST, not grep:
+    docstrings that mention these names are not callers."""
 
-    def _callers_passing_console(self) -> list[str]:
+    def _callers(self, wanted: str, keyword: str | None = None) -> list[str]:
+        """Calls to `wanted` (passing `keyword`, when one is named) in the package."""
         found: list[str] = []
         for path in sorted((REPO_ROOT / "hyperspace").rglob("*.py")):
             tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -254,11 +256,16 @@ class ConsoleDoorCallerTests(unittest.TestCase):
                     continue
                 func = node.func
                 name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", None)
-                if name == "call_tool" and any(kw.arg == "console" for kw in node.keywords):
+                if name == wanted and (keyword is None or any(kw.arg == keyword for kw in node.keywords)):
                     found.append(f"{path.relative_to(REPO_ROOT).as_posix()}:{node.lineno}")
         return found
 
     def test_only_the_http_route_passes_console(self) -> None:
-        callers = self._callers_passing_console()
+        callers = self._callers("call_tool", keyword="console")
+        self.assertEqual(1, len(callers), callers)
+        self.assertTrue(callers[0].startswith("hyperspace/http/routes.py:"), callers)
+
+    def test_only_the_http_route_patches_as_the_console(self) -> None:
+        callers = self._callers("console_patch_work_item")
         self.assertEqual(1, len(callers), callers)
         self.assertTrue(callers[0].startswith("hyperspace/http/routes.py:"), callers)

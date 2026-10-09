@@ -290,6 +290,150 @@ def test_mcp_door_label_cannot_be_chosen_by_the_request_body(running_door):
     assert status == 404
 
 
+# ── PATCH /api/work-items/<id> — the console closes a task ────────────────
+#
+# The request bodies below are the ones the pinned console bundle sends
+# (`ui/dist`, Caelos dfcb46d; tests/test_ui_bundle.py checks the key set
+# against the bundle itself): partial, ops-server key names (`module`,
+# `parent_work_item`, `assignee_agent`), the id in the URL being the row's
+# external_id (or its uuid).
+
+WI = "demo-project:wi-1"
+
+
+def _patch(door: Door, path: str, payload, headers: dict | None = None):
+    conn = HTTPConnection(door.server_address[0], door.server_address[1])
+    try:
+        body = payload if isinstance(payload, (bytes, str)) else json.dumps(payload)
+        if isinstance(body, str):
+            body = body.encode("utf-8")
+        conn.request("PATCH", path, body=body, headers={"Content-Type": "application/json", **(headers or {})})
+        resp = conn.getresponse()
+        return resp.status, json.loads(resp.read())
+    finally:
+        conn.close()
+
+
+def _row(door: Door, ident: str = WI) -> dict:
+    status, _ctype, body = _get(door, f"/api/work-items/{ident}")
+    assert status == 200
+    return json.loads(body)
+
+
+def test_console_patch_state_done_closes_as_console(running_door):
+    status, data = _patch(running_door, f"/api/work-items/{WI}", {"state": "done"})
+    assert status == 200
+    assert data["status"] == "updated"
+    assert data["row"]["state"] == "done"
+    assert data["row"]["completed_by"] == "hyperspace-console"
+    assert data["row"]["completed_at"]
+    assert _row(running_door)["completed_by"] == "hyperspace-console"
+
+
+def test_console_patch_resolves_uuid_and_percent_encoded_ids(running_door, seeded_store_path):
+    _db, seed_row = seeded_store_path
+    status, data = _patch(running_door, f"/api/work-items/{seed_row['id']}", {"state": "in-progress"})
+    assert status == 200 and data["row"]["state"] == "in-progress"
+    # the page encodes ids with encodeURIComponent: the colon arrives as %3A
+    status, data = _patch(running_door, "/api/work-items/demo-project%3Awi-1", {"state": "done"})
+    assert status == 200 and data["row"]["completed_by"] == "hyperspace-console"
+    assert _row(running_door, "demo-project%3Awi-1")["state"] == "done"
+
+
+def test_console_patch_reopening_clears_the_stamp(running_door):
+    _patch(running_door, f"/api/work-items/{WI}", {"state": "done"})
+    status, data = _patch(running_door, f"/api/work-items/{WI}", {"state": "ready"})
+    assert status == 200
+    assert data["row"]["state"] == "ready"
+    assert data["row"]["completed_by"] is None and data["row"]["completed_at"] is None
+
+
+def test_console_patch_never_rewrites_the_door_that_closed_a_row(running_door, seeded_store_path):
+    db_path, seed_row = seeded_store_path
+    store = Store.open(db_path)
+    try:
+        store.set_work_item_state(seed_row["id"], "done", completed_by="hyperspace-verifier")
+    finally:
+        store.close()
+    # an edit that resends the same state, and an edit that does not mention it
+    for body in ({"state": "done"}, {"name": "Renamed by the console"}):
+        status, data = _patch(running_door, f"/api/work-items/{WI}", body)
+        assert status == 200
+        assert data["row"]["completed_by"] == "hyperspace-verifier", body
+    assert data["row"]["name"] == "Renamed by the console"
+
+
+def test_console_patch_sets_only_the_keys_sent(running_door):
+    before = _row(running_door)
+    status, data = _patch(running_door, f"/api/work-items/{WI}", {
+        "name": "New name", "description": "New description",
+        "acceptance_criteria": "Every check in the suite passes on the target.",
+        "acceptance_criteria_ref": "docs/criteria.md", "assignee_agent": "engineer",
+        "team": ["engineer", "designer"], "position": 1.5,
+        "module": "demo-project:mod-1", "parent_work_item": None, "project": "demo-project",
+        "source_references": [{"uri": "docs/a.md", "anchor": "top"}, {"uri": "docs/b.md"}],
+    })
+    assert status == 200, data
+    row = data["row"]
+    assert (row["name"], row["description"], row["assignee_agent"]) == ("New name", "New description", "engineer")
+    assert row["team"] == ["engineer", "designer"] and row["position"] == 1.5
+    assert row["source_references"] == [{"uri": "docs/a.md", "anchor": "top"}, {"uri": "docs/b.md", "anchor": None}]
+    assert row["module_id"] is not None and row["parent_work_item_id"] is None
+    # untouched: state, type, filing key
+    assert (row["state"], row["type"], row["idempotency_key"]) == (before["state"], before["type"], before["idempotency_key"])
+
+
+@pytest.mark.parametrize("body, status_code, fragment", [
+    ({}, 400, "at least one mutable field"),
+    ({"completed_by": "hyperspace-verifier"}, 400, "unknown or immutable fields: completed_by"),
+    ({"state": "done", "closure_label": "x"}, 400, "closure_label"),
+    ({"state": "finished"}, 400, "invalid state"),
+    ({"name": "  "}, 400, "name must be"),
+    ({"team": "engineer"}, 400, "team must be a list"),
+    ({"position": "first"}, 400, "position must be a number"),
+    ({"source_references": [{"anchor": "no uri"}]}, 400, "source_references"),
+    ({"project": "another-project"}, 400, "another project"),
+    ({"parent_work_item": WI}, 400, "its own parent"),
+    ({"module": "demo-project:nope"}, 404, "module not found"),
+    ({"parent_work_item": "demo-project:nope"}, 404, "parent work item not found"),
+])
+def test_console_patch_refusals_write_nothing(running_door, body, status_code, fragment):
+    before = _row(running_door)
+    status, data = _patch(running_door, f"/api/work-items/{WI}", body)
+    assert status == status_code, data
+    assert fragment in data["error"]
+    after = _row(running_door)
+    assert {k: v for k, v in after.items() if k != "updated_at"} == {k: v for k, v in before.items() if k != "updated_at"}
+
+
+def test_console_patch_cannot_clear_set_criteria_but_null_to_null_is_legal(running_door):
+    _patch(running_door, f"/api/work-items/{WI}", {"acceptance_criteria": "Every check in the suite passes."})
+    status, data = _patch(running_door, f"/api/work-items/{WI}", {"acceptance_criteria": None})
+    assert status == 400 and "cannot be cleared" in data["error"]
+
+
+def test_console_patch_unknown_row_and_bad_bodies(running_door):
+    assert _patch(running_door, "/api/work-items/demo-project:missing", {"state": "done"})[0] == 404
+    assert _patch(running_door, f"/api/work-items/{WI}", b"not json")[0] == 400
+    assert _patch(running_door, f"/api/work-items/{WI}", ["state", "done"])[0] == 400
+    assert _patch(running_door, "/api/modules/demo-project:mod-1", {"state": "done"})[0] == 404
+
+
+def test_console_patch_closes_a_row_the_mcp_tool_refuses_to_close(running_door, seeded_store_path):
+    """The two doors side by side: the MCP tool's agent door refuses `done`,
+    the console's PATCH closes the same row under its own label."""
+    db_path, _seed = seeded_store_path
+    store = Store.open(db_path)
+    try:
+        refused = call_tool(store, "upsert_work_item", _candidate(state="done", idempotency_key="wi-1-agent-done"))
+        assert refused["error"]["code"] == "refused"
+        assert store.get_work_item(external_id=WI, project_code="demo-project")["state"] != "done"
+    finally:
+        store.close()
+    status, data = _patch(running_door, f"/api/work-items/{WI}", {"state": "done"})
+    assert status == 200 and data["row"]["completed_by"] == "hyperspace-console"
+
+
 def test_mcp_tool_error_is_iserror(running_door):
     # Missing acceptance_criteria -> ToolError("validation", ...) inside
     # call_tool, which call_tool itself wraps into {"error": {...}} —

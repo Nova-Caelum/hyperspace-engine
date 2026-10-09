@@ -17,9 +17,11 @@ server's 0.9.15 / 0.9.17 done door):
   agent (MCP, stdio)   `upsert_work_item`          refused — no label, no write
   verifier             `verify/deps.py` commit      `hyperspace-verifier`
   console (HTTP)       `console_upsert_work_item`   `hyperspace-console`
+                       `console_patch_work_item`    `hyperspace-console`
 
 The agent door is the default everywhere. Only `call_tool(..., console=True)`,
-which only `http/routes.py::route_mcp` passes, reaches the console door.
+which only `http/routes.py::route_mcp` passes, reaches the console door; and
+`console_patch_work_item` is called only by `http/routes.py::route_patch`.
 """
 from __future__ import annotations
 
@@ -28,9 +30,10 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from ..contracts.candidate import AcceptanceCriterion, CandidateWorkItem, Specification
+from ..contracts.candidate import AcceptanceCriterion, CandidateWorkItem, SourceReference, Specification
 from ..contracts.enums import is_done_flip
 from ..store import Store
+from ..store.store import WORK_ITEM_STATES
 from .registry import ToolError
 
 _UNSET = object()
@@ -235,6 +238,97 @@ def _file_work_item(store: Store, candidate_fields: dict[str, Any], *, closure_l
 
     row = store.get_work_item(id=row["id"])
     return {"status": status, "row": row, "filing_id": filing_id}
+
+
+#: The body keys the pinned console bundle (`ui/dist`, Caelos `dfcb46d`) sends on
+#: `PATCH /api/work-items/<id>`. `tests/test_ui_bundle.py` reads the bundle and
+#: fails if it ever sends a key outside this set.
+PATCHABLE_FIELDS = frozenset({
+    "name", "description", "acceptance_criteria", "acceptance_criteria_ref", "state",
+    "assignee_agent", "team", "module", "project", "parent_work_item", "position",
+    "source_references",
+})
+
+
+def _patch_text(body: dict, key: str) -> None:
+    if body[key] is not None and not isinstance(body[key], str):
+        raise ToolError("validation", f"{key} must be a string or null")
+
+
+def console_patch_work_item(store: Store, row: dict, body: Any) -> dict:
+    """The console door's partial update (`PATCH /api/work-items/<id>`): only the
+    keys sent change; the rest keep their value. A change of `state` into `done`
+    is stamped `hyperspace-console` and `completed_at`; a change out of `done`
+    clears both; a PATCH that leaves `state` where it is never touches the stamp,
+    so the door that closed a row is not rewritten by whoever edited it next.
+
+    `row` is the existing row, resolved by the caller. The label is this
+    function's, never a key of `body` (an unknown key is refused). Every value
+    is validated before the first write. Returns `{"status": "updated", "row": ...}`,
+    the shape the console unwraps.
+    """
+    if not isinstance(body, dict) or not body:
+        raise ToolError("validation", "at least one mutable field is required")
+    unknown = set(body) - PATCHABLE_FIELDS
+    if unknown:
+        raise ToolError("validation", f"unknown or immutable fields: {', '.join(sorted(unknown))}")
+
+    project = row["project_code"]
+    fields: dict[str, Any] = {}
+
+    if "name" in body:
+        name = body["name"]
+        if not isinstance(name, str) or not name.strip() or len(name) > 500:
+            raise ToolError("validation", "name must be a non-empty string of at most 500 characters")
+        fields["name"] = name
+    for key in ("description", "acceptance_criteria", "acceptance_criteria_ref", "assignee_agent"):
+        if key in body:
+            _patch_text(body, key)
+            fields[key] = body[key]
+    if (
+        "acceptance_criteria" in body
+        and body["acceptance_criteria"] is None
+        and row.get("acceptance_criteria") is not None
+    ):
+        raise ToolError("validation", "acceptance_criteria cannot be cleared once set")
+    if "team" in body:
+        team = body["team"]
+        if not isinstance(team, list) or not all(isinstance(t, str) for t in team):
+            raise ToolError("validation", "team must be a list of strings")
+        fields["team"] = team
+    if "position" in body:
+        position = body["position"]
+        if position is not None and (isinstance(position, bool) or not isinstance(position, (int, float))):
+            raise ToolError("validation", "position must be a number or null")
+        fields["position"] = position
+    if "source_references" in body:
+        refs = body["source_references"]
+        try:
+            if not isinstance(refs, list):
+                raise TypeError("source_references must be a list")
+            fields["source_references"] = [SourceReference(**r).model_dump(mode="json") for r in refs]
+        except (TypeError, ValidationError) as exc:
+            raise ToolError("validation", _trim(f"source_references: {exc}")) from exc
+    if "module" in body:
+        fields["module_id"] = _resolve_module_id(store, project, body["module"])
+    if "parent_work_item" in body:
+        parent_id = _resolve_parent_id(store, project, body["parent_work_item"])
+        if parent_id is not None and parent_id == row["id"]:
+            raise ToolError("validation", "a work item cannot be its own parent")
+        fields["parent_work_item_id"] = parent_id
+    if "project" in body and body["project"] != project:
+        raise ToolError("validation", "moving a work item to another project is not supported")
+    new_state = body.get("state", row.get("state"))
+    if "state" in body and new_state not in WORK_ITEM_STATES:
+        raise ToolError("validation", f"invalid state: {new_state!r}")
+
+    if fields:
+        store.upsert_work_item(project_code=project, external_id=row["external_id"], **fields)
+    if new_state != row.get("state"):
+        store.set_work_item_state(
+            row["id"], new_state, completed_by=CONSOLE_IDENTITY if new_state == "done" else None
+        )
+    return {"status": "updated", "row": store.get_work_item(id=row["id"])}
 
 
 def get_work_item(

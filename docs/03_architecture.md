@@ -187,14 +187,15 @@ The path one work item takes from filing to a `done` you can see in the browser:
 | 8. Commit | Verifier → store | `done`, `refused`, `unverifiable` or `already_done`. On `done` the row's `completed_by` is `hyperspace-verifier`, and the run is recorded in `verifier_runs`. |
 | 9. Read | Door → browser | The console reads `GET /api/work-items/<id>` and shows the row as done. |
 
-A person can also mark a row done in the console; that closure is stamped `hyperspace-console`. Given
+A person can also mark a row done in the console: the page sends `PATCH /api/work-items/<id>` with the
+new `state`, and that closure is stamped `hyperspace-console` (reopening the row clears the stamp). Given
 a graph snapshot, the Build gate accepts these two labels and refuses any other door by name.
 
 The MCP tool is not a third way to close a row. `upsert_work_item` refuses `state="done"` on create and
 on update, before it writes anything, and tells the agent to run `complete_workitem` or ask the user.
 Which label a closure carries is decided by the code path, never by a field in the request: the stdio
-MCP server calls the tool table as an agent, and only the loopback door's `/mcp` handler
-(`hyperspace/http/routes.py::route_mcp`) calls it as the console.
+MCP server calls the tool table as an agent, and only the loopback door's own handlers
+(`hyperspace/http/routes.py`: `route_mcp` for `/mcp`, `route_patch` for the PATCH) write as the console.
 
 ---
 
