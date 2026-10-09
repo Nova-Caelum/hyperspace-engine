@@ -38,20 +38,16 @@ python_ok() {
 }
 
 # Sets PY (and PY_ARG, for `py -3`) to the first interpreter python_ok
-# accepts, in this order: the project's own environment (either venv layout —
-# `bin/python`, which setup makes real on every OS, then Windows' native
-# `Scripts/python.exe`), python3, python, and the Windows `py` launcher.
+# accepts, in this order: python3, python, then the Windows `py` launcher.
+#
+# The project's own `.hyperspace/env` is deliberately NOT a candidate. This hook
+# runs on every SessionStart in every folder Claude Code opens, and a folder can
+# ship a file at `.hyperspace/env/bin/python` — trying it would run whatever
+# that file is. hooks/session_start.py is stdlib-only (plus this plugin's own
+# bin/), so the computer's own Python is all it needs.
 find_python() {
     PY=""
     PY_ARG=""
-    for candidate in \
-        "$PROJECT_DIR/.hyperspace/env/bin/python" \
-        "$PROJECT_DIR/.hyperspace/env/Scripts/python.exe"; do
-        if { [ -f "$candidate" ] || [ -f "$candidate.exe" ]; } && python_ok "$candidate"; then
-            PY="$candidate"
-            return 0
-        fi
-    done
     for name in python3 python; do
         candidate="$(command -v "$name" 2>/dev/null)"
         if [ -n "$candidate" ] && python_ok "$candidate"; then
@@ -98,7 +94,7 @@ main() {
     fi
 
     if ! find_python; then
-        printf '⚠️ No Python 3.11+ found (tried the project environment, python3, python, py -3) — skipping the active-run and worklog blocks.\n'
+        printf '⚠️ No Python 3.11+ found (tried python3, python, py -3) — skipping the active-run and worklog blocks.\n'
         return 0
     fi
 
