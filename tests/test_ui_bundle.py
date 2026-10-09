@@ -106,3 +106,22 @@ def test_mock_sentinel_absent_or_documented():
         "mock sentinel string is present in the built JS as apparent dead code; "
         "ui/SOURCE.md must record this finding"
     )
+
+
+def test_bundle_patch_body_keys_are_all_accepted_by_the_door():
+    """The console builds the body of `PATCH /api/work-items/<id>` key by key
+    (`Y.name=...`, `Y.module=...`). The door's partial update must accept every
+    key the pinned bundle can send, or a save from the page fails with a 400.
+    Rebuilding the bundle against a newer Caelos commit that sends a new key
+    fails here, naming the key."""
+    from hyperspace.tools.work_items import PATCHABLE_FIELDS
+
+    js = _all_built_js_text()
+    start = re.search(r"const (\w+)=\{\};if\(\w+\.title!==void 0&&\(\1\.name=", js)
+    assert start, "could not locate the console's work-item PATCH body builder in ui/dist"
+    var = start.group(1)
+    end = js.index('throw new Error("nothing to save")', start.end())
+    sent = set(re.findall(rf"\b{var}\.(\w+)=", js[start.start():end]))
+    assert sent, "the PATCH body builder was found but sends no keys"
+    assert sent <= PATCHABLE_FIELDS, f"the bundle sends keys the door refuses: {sorted(sent - PATCHABLE_FIELDS)}"
+    assert "state" in sent  # the key that closes a task

@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ..store import Store
-from .routes import route_get, route_mcp
+from .routes import route_get, route_mcp, route_patch
 
 _LOOPBACK_HOSTS = ("127.0.0.1", "localhost")
 
@@ -159,18 +159,30 @@ class DoorRequestHandler(BaseHTTPRequestHandler):
             return
         self._serve_static(self.path)
 
+    def _read_json_body(self) -> Any:
+        """The parsed JSON body, or `None` when it is empty or not JSON."""
+        length = int(self.headers.get("Content-Length") or 0)
+        raw = self.rfile.read(length) if length else b""
+        try:
+            return json.loads(raw) if raw else None
+        except json.JSONDecodeError:
+            return None
+
+    def do_PATCH(self) -> None:
+        request_obj = self._read_json_body()  # always drained: the connection is kept alive
+        store = self._open_store()
+        try:
+            status, body = route_patch(store, self.path, request_obj)
+        finally:
+            store.close()
+        self._write_json(status, body)
+
     def do_POST(self) -> None:
         if self.path != "/mcp":
             self._write_json(404, {"error": f"not found: {self.path}"})
             return
 
-        length = int(self.headers.get("Content-Length") or 0)
-        raw = self.rfile.read(length) if length else b""
-        try:
-            request_obj = json.loads(raw) if raw else None
-        except json.JSONDecodeError:
-            request_obj = None
-
+        request_obj = self._read_json_body()
         store = self._open_store()
         try:
             response = route_mcp(store, request_obj)

@@ -1,5 +1,6 @@
 """hyperspace/http/routes.py — the console's REST-read and JSON-RPC-write
-contract as two pure functions (row T4.2).
+contract as pure functions (row T4.2): `route_get`, `route_mcp`, and the console's
+REST update of a work item, `route_patch`.
 
 No socket code lives here on purpose — `route_get(store, path) -> (status,
 body_obj)` and `route_mcp(store, request_obj) -> response_obj` take and
@@ -19,10 +20,11 @@ import json
 import re
 import uuid as _uuid
 from typing import Any
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 from ..store import Store
-from ..tools.registry import call_tool
+from ..tools.registry import ToolError, call_tool
+from ..tools.work_items import console_patch_work_item
 
 _PROJECTS = re.compile(r"^/api/projects$")
 _PROJECT_SUB = re.compile(r"^/api/projects/([^/]+)/(work-items|modules|cycles)$")
@@ -69,15 +71,20 @@ def _resolve_initiative(store: Store, seg: str) -> dict | None:
     return store.get_initiative(external_id=seg)
 
 
+def _split_api_path(path: str) -> tuple[str, str | None]:
+    """The percent-decoded path and its `?project_code=`. The console builds
+    `/api/work-items/${encodeURIComponent(id)}`, and a work item's external_id
+    is `<project>:<slug>`, so the colon arrives as `%3A`."""
+    split = urlsplit(path)
+    return unquote(split.path), (parse_qs(split.query).get("project_code") or [None])[0]
+
+
 def route_get(store: Store, path: str) -> tuple[int, Any]:
     """Dispatches a GET `path` (any query string is parsed and ignored unless
     a route names it explicitly — `project_code` disambiguates a
     project-scoped external_id on the module/work-item detail routes, mirroring
     the console's own `?project_code=...` on `/api/modules/{id}`)."""
-    split = urlsplit(path)
-    clean_path = split.path
-    query = parse_qs(split.query)
-    project_code = (query.get("project_code") or [None])[0]
+    clean_path, project_code = _split_api_path(path)
 
     if not clean_path.startswith("/api/"):
         return 404, {"error": f"not found: {clean_path}"}
@@ -126,6 +133,32 @@ def route_get(store: Store, path: str) -> tuple[int, Any]:
         return 200, row
 
     return 404, {"error": f"not found: {clean_path}"}
+
+
+_TOOL_ERROR_STATUS = {"validation": 400, "refused": 400, "not_found": 404, "conflict": 409}
+
+
+def route_patch(store: Store, path: str, body_obj: Any) -> tuple[int, Any]:
+    """`PATCH /api/work-items/<id>` — the bundled page's partial update of a work
+    item (its save, status and reorder controls). This is the console's door, so
+    a change of `state` into `done` is stamped `hyperspace-console`
+    (`console_patch_work_item`, called from nowhere else). Replies in the shape
+    the page unwraps: `{"status": "updated", "row": ...}`, or `{"error": ...}`."""
+    clean_path, project_code = _split_api_path(path)
+    m = _WORK_ITEM_ITEM.match(clean_path)
+    if not m:
+        return 404, {"error": f"not found: {clean_path}"}
+    if not isinstance(body_obj, dict):
+        return 400, {"error": "request body must be a JSON object"}
+    row = _resolve_work_item(store, m.group(1), project_code)
+    if row is None:
+        return 404, {"error": f"work item not found: {m.group(1)!r}"}
+    try:
+        return 200, console_patch_work_item(store, row, body_obj)
+    except ToolError as exc:
+        return _TOOL_ERROR_STATUS[exc.code], {"error": exc.message}
+    except Exception as exc:  # noqa: BLE001 — never a traceback over the wire
+        return 500, {"error": f"{type(exc).__name__}: {exc}"}
 
 
 def _is_tool_error_result(result: Any) -> bool:
