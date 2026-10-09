@@ -205,18 +205,106 @@ def test_upsert_work_item_idempotent_repeat(store):
     assert second["row"]["id"] == first["row"]["id"]
 
 
-def test_upsert_work_item_done_sets_completed_by_console(store):
-    result = upsert_work_item(
-        store,
-        **_candidate(
-            idempotency_key="wi-1-done",
-            state="done",
-            acceptance_criteria=[
-                {"statement": "Exits 0 when run against the fixture.", "verification": {"kind": "command_check", "check_id": "tests"}}
-            ],
-        ),
+# ── upsert_work_item — the done door ─────────────────────────────────────
+#
+# Three doors write `state="done"`, and the code path decides which, never a
+# field the caller sends: the MCP tool REFUSES (these tests), the verifier
+# stamps `hyperspace-verifier` (tests/test_verify.py::test_done_path_none_judge,
+# tests/test_mcp_stdio.py), and the console's HTTP path stamps
+# `hyperspace-console` (here via `call_tool(..., console=True)`, and over the
+# real socket in tests/test_http.py).
+
+EXT = "demo-project:wi-1"
+
+
+def test_upsert_work_item_done_on_create_refused(store):
+    with pytest.raises(ToolError) as exc_info:
+        upsert_work_item(store, **_candidate(state="done"))
+    assert exc_info.value.code == "refused"
+    message = exc_info.value.message
+    assert "complete_workitem" in message  # path 1: the verifier
+    assert "console" in message  # path 2: the user closes it
+    assert "Nothing was written" in message
+    # refused before any write: no row, no filing
+    assert store.get_work_item(external_id=EXT, project_code="demo-project") is None
+    assert store.latest_filing(EXT) is None
+
+
+def test_upsert_work_item_done_on_update_refused(store):
+    filed = upsert_work_item(store, **_candidate(state="ready"))
+    with pytest.raises(ToolError) as exc_info:
+        upsert_work_item(store, **_candidate(state="done", idempotency_key="wi-1-done"))
+    assert exc_info.value.code == "refused"
+    row = store.get_work_item(id=filed["row"]["id"])
+    assert row["state"] == "ready"
+    assert row["completed_by"] is None
+    assert store.latest_filing(EXT)["id"] == filed["filing_id"]  # no new filing
+
+
+def test_call_tool_defaults_to_the_agent_door(store):
+    result = call_tool(store, "upsert_work_item", _candidate(state="done"))
+    assert result["error"]["code"] == "refused"
+    assert store.get_work_item(external_id=EXT, project_code="demo-project") is None
+
+
+def test_agent_door_still_files_and_advances_an_open_row(store):
+    call_tool(store, "upsert_work_item", _candidate(state="ready"))
+    result = call_tool(
+        store, "upsert_work_item", _candidate(state="in-progress", idempotency_key="wi-1-wip")
     )
+    assert result["status"] == "updated"
+    assert result["row"]["state"] == "in-progress"
+    assert result["row"]["completed_by"] is None
+
+
+def test_console_door_create_done_is_stamped_console(store):
+    result = call_tool(store, "upsert_work_item", _candidate(state="done"), console=True)
+    assert result["status"] == "filed"
+    assert result["row"]["state"] == "done"
     assert result["row"]["completed_by"] == "hyperspace-console"
+
+
+def test_console_door_update_done_is_stamped_console(store):
+    call_tool(store, "upsert_work_item", _candidate(state="ready"))
+    result = call_tool(
+        store, "upsert_work_item", _candidate(state="done", idempotency_key="wi-1-done"), console=True
+    )
+    assert result["status"] == "updated"
+    assert result["row"]["state"] == "done"
+    assert result["row"]["completed_by"] == "hyperspace-console"
+
+
+def test_console_door_without_done_stamps_nothing(store):
+    result = call_tool(store, "upsert_work_item", _candidate(state="ready"), console=True)
+    assert result["row"]["completed_by"] is None
+
+
+@pytest.mark.parametrize("field, value", [
+    ("console", True),
+    ("door", "console"),
+    ("closure_label", "hyperspace-console"),
+    ("completed_by", "hyperspace-verifier"),
+])
+def test_a_caller_field_cannot_choose_the_door_or_the_label(store, field, value):
+    """The door is a parameter of `call_tool`, not a key of `arguments`; the
+    contract forbids extra fields, so the call is rejected on both doors."""
+    for console in (False, True):
+        result = call_tool(
+            store, "upsert_work_item", {**_candidate(state="done"), field: value}, console=console
+        )
+        assert result["error"]["code"] == "validation", (field, console, result)
+    assert store.get_work_item(external_id=EXT, project_code="demo-project") is None
+
+
+def test_an_underscore_key_is_stripped_and_does_not_choose_the_door(store):
+    result = call_tool(store, "upsert_work_item", {**_candidate(state="done"), "_console": True})
+    assert result["error"]["code"] == "refused"
+    assert store.get_work_item(external_id=EXT, project_code="demo-project") is None
+
+
+def test_upsert_work_item_description_names_the_refusal():
+    description = TOOLS["upsert_work_item"].description
+    assert 'state="done"' in description and "complete_workitem" in description
 
 
 # ── upsert_work_item — unresolved module/parent_work_item refused ────────

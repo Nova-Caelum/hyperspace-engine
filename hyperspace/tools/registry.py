@@ -129,7 +129,9 @@ TOOLS: dict[str, ToolSpec] = {
         description=(
             "File or update a work item: validates the candidate contract, refuses "
             "missing or placeholder criteria, writes the row and an immutable filing "
-            "directly (no queue), and mints a fresh filing key on a criteria update."
+            "directly (no queue), and mints a fresh filing key on a criteria update. "
+            'Refuses state="done" on create and update alike: close a row with '
+            "complete_workitem, or ask the user to close it in the console."
         ),
         # `**candidate_fields` carries no named parameters to introspect — the
         # contract model itself IS the schema, and pydantic derives it directly.
@@ -252,16 +254,30 @@ TOOLS: dict[str, ToolSpec] = {
 }
 
 
-def call_tool(store: Store, name: str, arguments: dict | None = None) -> Any:
+#: The console's own implementation of a tool, where the console is allowed to
+#: do what an agent is not. Today that is one tool: a person may close a row
+#: (`hyperspace-console`), an agent may not.
+CONSOLE_TOOLS: dict[str, Callable[..., Any]] = {
+    "upsert_work_item": work_items.console_upsert_work_item,
+}
+
+
+def call_tool(store: Store, name: str, arguments: dict | None = None, *, console: bool = False) -> Any:
     """Dispatches `name` against `TOOLS`, converting a `ToolError` into
     `{"error": {"code", "message"}}` — and wrapping any OTHER exception the
-    same way, so nothing escapes unhandled."""
+    same way, so nothing escapes unhandled.
+
+    `console` names the DOOR, and it is a parameter of this function — never a
+    key of `arguments`, so nothing a caller sends can set it. The default is the
+    agent door; only the HTTP transport (`http/routes.py::route_mcp`) passes
+    `console=True`."""
     arguments = arguments or {}
     spec = TOOLS.get(name)
     if spec is None:
         return {"error": {"code": "not_found", "message": f"no such tool: {name!r}"}}
+    fn = CONSOLE_TOOLS.get(name, spec.fn) if console else spec.fn
     try:
-        return spec.fn(store, **arguments)
+        return fn(store, **arguments)
     except ToolError as exc:
         return {"error": {"code": exc.code, "message": exc.message}}
     except Exception as exc:  # noqa: BLE001 — the wrap-everything contract (brief step 2)

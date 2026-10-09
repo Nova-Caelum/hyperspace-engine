@@ -104,9 +104,9 @@ Filing and closing go through the plugin's `hyperspace` MCP server, against a lo
 
 | Tool | For |
 |---|---|
-| `upsert_work_item` | File a row. `gear4-draft` calls it once per task block and backfills the returned id into the plan. |
+| `upsert_work_item` | File a row. `gear4-draft` calls it once per task block and backfills the returned id into the plan. It refuses `state="done"`: closing a row is `complete_workitem`, or the user's. |
 | `upsert_project` · `upsert_module` | The containers rows belong to. |
-| `complete_workitem` | Close a row on evidence. Runs the five-step verifier locally and returns `done`, `refused`, `unverifiable`, or `already_done` — never a receipt. |
+| `complete_workitem` | Close a row on evidence — the only tool an agent closes a row with. Runs the five-step verifier locally and returns `done`, `refused`, `unverifiable`, or `already_done` — never a receipt. |
 
 Nothing leaves the machine.
 

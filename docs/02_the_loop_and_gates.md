@@ -155,7 +155,9 @@ so one pass fixes them all.
 
 Rows are closed by the verifier, which runs locally and writes one run file per attempt. A row may also
 be closed by hand in the task-graph console — a deliberate human closure is a legitimate discharge, and
-the two doors are distinguishable afterwards because each writes its own closure label.
+the two doors are distinguishable afterwards because each writes its own closure label. An agent has the
+first door only: `upsert_work_item` refuses `state="done"`, so the agent runs `complete_workitem` or
+asks the user to close the row.
 
 ### What the gate checks
 

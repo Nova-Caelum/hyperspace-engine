@@ -190,6 +190,12 @@ The path one work item takes from filing to a `done` you can see in the browser:
 A person can also mark a row done in the console; that closure is stamped `hyperspace-console`. Given
 a graph snapshot, the Build gate accepts these two labels and refuses any other door by name.
 
+The MCP tool is not a third way to close a row. `upsert_work_item` refuses `state="done"` on create and
+on update, before it writes anything, and tells the agent to run `complete_workitem` or ask the user.
+Which label a closure carries is decided by the code path, never by a field in the request: the stdio
+MCP server calls the tool table as an agent, and only the loopback door's `/mcp` handler
+(`hyperspace/http/routes.py::route_mcp`) calls it as the console.
+
 ---
 
 ## 9. Probes, tests and CI

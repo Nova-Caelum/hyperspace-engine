@@ -242,6 +242,80 @@ def test_stdio_server_lists_and_calls_all_tools_and_starts_door(tmp_path):
     asyncio.run(scenario())
 
 
+# ── (1b) the agent door refuses `done`; the verifier door still closes ─────
+
+
+def test_stdio_upsert_done_is_refused_and_the_verifier_still_closes(tmp_path):
+    """The whole path of the done door, over the wire an agent really uses:
+    `upsert_work_item` with `state="done"` is refused on UPDATE and on CREATE,
+    names both legitimate paths and writes nothing; `complete_workitem` then
+    closes the same row, stamped `hyperspace-verifier`; the refusal still holds
+    on the closed row."""
+    project_dir = _init_project(tmp_path, "proj-done-door", _free_port())
+
+    async def scenario():
+        async with stdio_client(_server_params(project_dir)) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                setup = await session.call_tool("upsert_project", {"code": PROJECT, "name": "Done door"})
+                assert not setup.is_error, setup
+
+                criterion = {
+                    "statement": "The result file is created by the work.",
+                    "verification": {"kind": "file_state", "path": "out/result.txt", "assertion": "exists"},
+                }
+                ext = f"{PROJECT}:wi-door"
+                filed = await session.call_tool("upsert_work_item", _candidate(ext, [criterion]))
+                assert not filed.is_error, filed
+
+                def assert_refused(result):
+                    assert result.is_error, result
+                    text = result.content[0].text
+                    assert "complete_workitem" in text and "console" in text, text
+                    assert "Nothing was written" in text, text
+
+                # UPDATE of an existing open row
+                assert_refused(await session.call_tool(
+                    "upsert_work_item",
+                    _candidate(ext, [criterion], state="done", idempotency_key=f"{ext}-agent-done"),
+                ))
+                # CREATE straight to done
+                ext_new = f"{PROJECT}:wi-born-done"
+                assert_refused(await session.call_tool(
+                    "upsert_work_item",
+                    _candidate(ext_new, [criterion], state="done", idempotency_key=f"{ext_new}-create"),
+                ))
+
+                row = _content_json(await session.call_tool("get_work_item", {"external_id": ext, "project": PROJECT}))
+                assert row["state"] == "ready" and row["completed_by"] is None
+                born = await session.call_tool("get_work_item", {"external_id": ext_new, "project": PROJECT})
+                assert not born.is_error and born.content[0].text == "null", born  # never created
+
+                # the verifier door still closes it
+                (project_dir / "out").mkdir(parents=True, exist_ok=True)
+                (project_dir / "out" / "result.txt").write_text("result\n", encoding="utf-8")
+                closed = await session.call_tool("complete_workitem", {
+                    "project": PROJECT, "external_id": ext,
+                    "touched": [{"path": "out/result.txt", "effect": "created"}],
+                    "idempotency_key": f"{ext}-done",
+                    "proposer_identity": "engineer", "proposer_surface": "cli-mac",
+                })
+                assert not closed.is_error, closed
+                assert _content_json(closed)["outcome"] == "done"
+                row = _content_json(await session.call_tool("get_work_item", {"external_id": ext, "project": PROJECT}))
+                assert row["state"] == "done" and row["completed_by"] == "hyperspace-verifier"
+
+                # and an agent cannot re-stamp the closed row with its own `done`
+                assert_refused(await session.call_tool(
+                    "upsert_work_item",
+                    _candidate(ext, [criterion], state="done", idempotency_key=f"{ext}-agent-redone"),
+                ))
+                row = _content_json(await session.call_tool("get_work_item", {"external_id": ext, "project": PROJECT}))
+                assert row["completed_by"] == "hyperspace-verifier"
+
+    asyncio.run(scenario())
+
+
 # ── (2) missing store: tools/list still answers, tools/call refuses ────────
 
 

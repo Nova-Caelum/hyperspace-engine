@@ -143,7 +143,11 @@ def route_mcp(store: Store, request_obj: Any) -> dict:
     `request_obj` is whatever the caller already parsed from the request body
     — `None` (unparsable/empty body) is a legal input and produces the same
     `-32600` shape as any other malformed request, so the HTTP layer never
-    needs a second error path for a JSON-decode failure."""
+    needs a second error path for a JSON-decode failure.
+
+    This is the console's door, so it is the only caller that passes
+    `console=True` to `call_tool`: a `state="done"` write that arrives here is
+    stamped `hyperspace-console`. The stdio MCP server never does."""
     req_id = request_obj.get("id") if isinstance(request_obj, dict) else None
 
     if not isinstance(request_obj, dict) or request_obj.get("method") != "tools/call":
@@ -165,7 +169,7 @@ def route_mcp(store: Store, request_obj: Any) -> dict:
     arguments = params.get("arguments") or {}
 
     try:
-        result = call_tool(store, name, arguments)
+        result = call_tool(store, name, arguments, console=True)
     except Exception as exc:  # noqa: BLE001 — nothing may escape as a 500/traceback;
         # `call_tool` already wraps its own tool-function exceptions into
         # {"error": ...}, so reaching this branch means call_tool's own

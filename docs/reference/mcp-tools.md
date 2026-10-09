@@ -13,7 +13,7 @@ project's `.hyperspace/graph.db`.
 | Tool | What it does |
 |---|---|
 | [`complete_workitem`](#complete_workitem) | Close a Task Graph row as done by independent verification, synchronously. The touched list (paths this work created, modified or deleted) IS the statement of work — no narrative field exists. Returns exactly one of done \| refused \| unverifiable \| already_done. |
-| [`upsert_work_item`](#upsert_work_item) | File or update a work item: validates the candidate contract, refuses missing or placeholder criteria, writes the row and an immutable filing directly (no queue), and mints a fresh filing key on a criteria update. |
+| [`upsert_work_item`](#upsert_work_item) | File or update a work item: validates the candidate contract, refuses missing or placeholder criteria, writes the row and an immutable filing directly (no queue), and mints a fresh filing key on a criteria update. Refuses state="done" on create and update alike: close a row with complete_workitem, or ask the user to close it in the console. |
 | [`get_work_item`](#get_work_item) | Read one work item by external_id (optionally scoped by project) or by id. |
 | [`list_work_items`](#list_work_items) | List work items, filtered by project/state/type/module/parent. |
 | [`link_work_items`](#link_work_items) | Create a directed relation between two work items (refuses an unknown relation_type). |
@@ -52,7 +52,7 @@ Nested types (`ManualAttestation`, `TouchedPath`) are defined in `hyperspace/ver
 
 ## upsert_work_item
 
-File or update a work item: validates the candidate contract, refuses missing or placeholder criteria, writes the row and an immutable filing directly (no queue), and mints a fresh filing key on a criteria update.
+File or update a work item: validates the candidate contract, refuses missing or placeholder criteria, writes the row and an immutable filing directly (no queue), and mints a fresh filing key on a criteria update. Refuses state="done" on create and update alike: close a row with complete_workitem, or ask the user to close it in the console.
 
 | Argument | Type | Required |
 |---|---|---|

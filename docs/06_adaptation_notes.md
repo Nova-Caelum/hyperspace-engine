@@ -160,6 +160,7 @@ unchanged.
 | Run folders | Under the operator's private workspace | `<project>/hyperspace/runs/<slug>/` |
 | Verifier run files (Build gate default) | A home-directory path | `<run-dir>/misc/verifications/` |
 | Closure labels the Build gate accepts | The source committer and console labels | `hyperspace-verifier`, `hyperspace-console` |
+| An agent writing `state="done"` through `upsert_work_item` | Refused on create and update (ops server 0.9.15, 0.9.17); the console is exempt | The same: the MCP tool refuses, the loopback door's `/mcp` handler is the console and stamps `hyperspace-console` |
 | Owner the console offers first | The operator | `user`, set at build time with `VITE_HUMAN_OWNER` |
 
 ---

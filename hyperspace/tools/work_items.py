@@ -9,6 +9,17 @@ then writes the work-item row and its immutable filing directly through
 enforced here, not in `Store` — `Store.add_filing` will happily write any
 filing it's given; the decision about WHEN a fresh key is required is this
 module's job.
+
+Three doors write `state="done"`, and which one a write came through is decided
+by the CODE PATH, never by a field the caller sends (ported from the ops
+server's 0.9.15 / 0.9.17 done door):
+
+  agent (MCP, stdio)   `upsert_work_item`          refused — no label, no write
+  verifier             `verify/deps.py` commit      `hyperspace-verifier`
+  console (HTTP)       `console_upsert_work_item`   `hyperspace-console`
+
+The agent door is the default everywhere. Only `call_tool(..., console=True)`,
+which only `http/routes.py::route_mcp` passes, reaches the console door.
 """
 from __future__ import annotations
 
@@ -18,10 +29,23 @@ from typing import Any
 from pydantic import ValidationError
 
 from ..contracts.candidate import AcceptanceCriterion, CandidateWorkItem, Specification
+from ..contracts.enums import is_done_flip
 from ..store import Store
 from .registry import ToolError
 
 _UNSET = object()
+
+#: `completed_by` for a row a person closed through the console's HTTP door.
+#: Mirrored in `bin/node_gates.py` (`_CONSOLE_LABEL`), which accepts it.
+CONSOLE_IDENTITY = "hyperspace-console"
+
+#: What an agent is told when it sends `state="done"` through the MCP tool.
+AGENT_DONE_REFUSAL = (
+    'state="done" is not accepted through upsert_work_item. Close the row with '
+    "complete_workitem on this same hyperspace server (it verifies the change on "
+    "disk and flips the row in the same call), or ask the user to close the task "
+    "in the console. Nothing was written."
+)
 
 
 def _strip_underscore_keys(value: Any) -> Any:
@@ -88,7 +112,9 @@ def _render_criteria_text(criteria: list[AcceptanceCriterion]) -> str:
     return "\n".join(f"- {c.statement}" for c in criteria)
 
 
-def _row_fields_from_candidate(store: Store, candidate: CandidateWorkItem) -> dict:
+def _row_fields_from_candidate(
+    store: Store, candidate: CandidateWorkItem, closure_label: str | None
+) -> dict:
     fields: dict[str, Any] = {
         "name": candidate.name,
         "type": candidate.type,
@@ -105,16 +131,34 @@ def _row_fields_from_candidate(store: Store, candidate: CandidateWorkItem) -> di
         "acceptance_criteria": _render_criteria_text(candidate.acceptance_criteria),
         "uncertainty_notes": [u.model_dump(mode="json") for u in candidate.uncertainty_notes],
     }
-    # The console's override path (state="done" sent directly, bypassing the
-    # verifier). The verifier always writes "hyperspace-verifier" itself —
-    # this tool never sets completed_by for anything but this one path.
-    if candidate.state == "done":
-        fields["completed_by"] = "hyperspace-console"
+    # `closure_label` is the door's own label, handed in by the caller of this
+    # module — never read from the candidate (the contract forbids extra
+    # fields, so a caller cannot send one). The verifier stamps its own label
+    # through `Store.set_work_item_state`, not through here.
+    if closure_label is not None and is_done_flip(candidate):
+        fields["completed_by"] = closure_label
     return fields
 
 
 def upsert_work_item(store: Store, **candidate_fields: Any) -> dict:
-    """Contract-validated filing. Returns
+    """The agent door (MCP): contract-validated filing that REFUSES `state="done"`
+    on CREATE and UPDATE alike, before any write. An agent closes a row through
+    `complete_workitem`, or hands the closure to the user. See `_file_work_item`
+    for the filing semantics."""
+    return _file_work_item(store, candidate_fields, closure_label=None)
+
+
+def console_upsert_work_item(store: Store, **candidate_fields: Any) -> dict:
+    """The console door (HTTP): the same filing, but a person's `state="done"`
+    is accepted and stamped `hyperspace-console`. Reached only through
+    `call_tool(..., console=True)`."""
+    return _file_work_item(store, candidate_fields, closure_label=CONSOLE_IDENTITY)
+
+
+def _file_work_item(store: Store, candidate_fields: dict[str, Any], *, closure_label: str | None) -> dict:
+    """Contract-validated filing, shared by both doors. `closure_label` is the
+    door's stamp for a `state="done"` write; `None` (the agent door) refuses a
+    done claim instead. Returns
     `{"status": "filed"|"updated"|"unchanged", "row": <work item dict>, "filing_id": ...}`.
 
     CREATE (no existing row/filing): writes the row, then a filing under the
@@ -137,6 +181,11 @@ def upsert_work_item(store: Store, **candidate_fields: Any) -> dict:
     except ValidationError as exc:
         raise ToolError("validation", _trim(str(exc))) from exc
 
+    # A completion claim is a property of the CANDIDATE, so it is refused here,
+    # ahead of every lookup and write, whether or not the row exists.
+    if closure_label is None and is_done_flip(candidate):
+        raise ToolError("refused", AGENT_DONE_REFUSAL)
+
     project = candidate.project
     external_id = candidate.external_id
 
@@ -156,7 +205,7 @@ def upsert_work_item(store: Store, **candidate_fields: Any) -> dict:
             f"immutable unless the caller opts in.",
         )
 
-    row_fields = _row_fields_from_candidate(store, candidate)
+    row_fields = _row_fields_from_candidate(store, candidate, closure_label)
     row = store.upsert_work_item(project_code=project, external_id=external_id, **row_fields)
 
     if latest is None:
