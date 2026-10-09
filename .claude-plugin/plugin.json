@@ -1,6 +1,6 @@
 {
   "name": "hyperspace-engine",
-  "version": "0.1.4",
+  "version": "1.0.0",
   "description": "A working loop, a local SQLite task graph, and a local verifier for Claude Code — standalone, no Nova Caelum infrastructure dependency.",
   "author": {
     "name": "Nova Caelum",
