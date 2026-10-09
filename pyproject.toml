@@ -23,3 +23,8 @@ hyperspace = "hyperspace.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["hyperspace"]
+
+# The console page: `hyperspace/http/server.py` resolves `ui/dist` beside the
+# package, so the wheel must carry it or `GET /` is a 404 after install.
+[tool.hatch.build.targets.wheel.force-include]
+"ui/dist" = "ui/dist"

@@ -13,9 +13,12 @@ Sub-checks, all must PASS:
   (d) the launcher for this platform exists (executable on POSIX), and
       RUNNING it — `cmd /c "Open Hyperspace.bat"` on Windows, `sh <launcher>`
       elsewhere — serves the console on the configured port and opens the
-      browser at it (a recording fake browser via `BROWSER`); on Windows the
-      same `.bat` in a project with no environment refuses (exit 1) naming
-      the `hyperspace-setup` skill
+      browser at it (a recording fake browser via `BROWSER`); that same
+      running door, which is the WHEEL provisioning installed (not the source
+      tree), answers `GET /` with the console page: 200, `text/html` — a wheel
+      that omits `ui/dist` serves a 404 there; on Windows the same `.bat` in a
+      project with no environment refuses (exit 1) naming the
+      `hyperspace-setup` skill
   (e) the door starts on a free port and answers `GET /api/projects`, then
       `hyperspace doctor` re-runs the check phase and exits 0
   (f) the running interpreter's own site-packages (`sys.executable -m pip
@@ -131,6 +134,26 @@ def _launcher_argv(launcher: Path) -> list[str]:
     return ["cmd", "/d", "/c", str(launcher)] if launcher.suffix == ".bat" else ["sh", str(launcher)]
 
 
+def _console_page(port: int) -> dict:
+    """`GET /` on the running door. A missing console bundle is a 404, which
+    `urlopen` raises as `HTTPError` — an answer to record, not a failure to
+    propagate (an `HTTPError` is itself a readable response)."""
+    try:
+        resp = urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=5)
+    except urllib.error.HTTPError as exc:
+        resp = exc
+    except (urllib.error.URLError, OSError) as exc:
+        return {"status": None, "content_type": "", "ok": False, "body_head": _trim(str(exc), 200)}
+    with resp:
+        body = resp.read().decode("utf-8", errors="replace")
+        content_type = resp.headers.get("Content-Type", "")
+        return {
+            "status": resp.status, "content_type": content_type,
+            "ok": resp.status == 200 and content_type.startswith("text/html") and "<html" in body.lower(),
+            "body_head": _trim(body, 200),
+        }
+
+
 def _run_launcher(launcher: Path, port: int, env: dict, browser: Path, record: Path) -> dict:
     """Runs the launcher, waits up to 60 s for the door on `port`, stops it."""
     proc = subprocess.Popen(
@@ -138,6 +161,7 @@ def _run_launcher(launcher: Path, port: int, env: dict, browser: Path, record: P
         stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
     )
     served = False
+    console_page = None
     deadline = time.time() + 60
     try:
         while time.time() < deadline and proc.poll() is None:
@@ -147,6 +171,8 @@ def _run_launcher(launcher: Path, port: int, env: dict, browser: Path, record: P
                     break
             except (urllib.error.URLError, OSError):
                 time.sleep(0.5)
+        if served:
+            console_page = _console_page(port)
         # `--open` fires right after the bind; give the recorder a moment.
         for _ in range(20):
             if record.is_file():
@@ -159,6 +185,7 @@ def _run_launcher(launcher: Path, port: int, env: dict, browser: Path, record: P
     return {
         "argv": _launcher_argv(launcher),
         "served": served,
+        "console_page": console_page,
         "opened_url": opened,
         "opened_ok": opened.rstrip("/") == f"http://127.0.0.1:{port}",
         "exited_before_serving": exited_early,
@@ -256,7 +283,8 @@ def main(argv=None) -> int:
         browser, record = _fake_browser(tmp_path / "fakebrowser")
         launcher_run = _run_launcher(launcher_path, port, env, browser, record)
         evidence["launcher_run"] = launcher_run
-        launcher_ok = launcher_file_ok and launcher_run["served"] and launcher_run["opened_ok"]
+        console_page_ok = bool((launcher_run["console_page"] or {}).get("ok"))
+        launcher_ok = launcher_file_ok and launcher_run["served"] and launcher_run["opened_ok"] and console_page_ok
         if IS_WINDOWS:
             without_env = _run_launcher_without_env(launcher_path, tmp_path, env)
             evidence["launcher_without_env"] = without_env
