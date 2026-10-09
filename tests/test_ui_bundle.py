@@ -125,3 +125,38 @@ def test_bundle_patch_body_keys_are_all_accepted_by_the_door():
     assert sent, "the PATCH body builder was found but sends no keys"
     assert sent <= PATCHABLE_FIELDS, f"the bundle sends keys the door refuses: {sorted(sent - PATCHABLE_FIELDS)}"
     assert "state" in sent  # the key that closes a task
+
+
+def _create_body_keys(js: str, marker: str) -> set[str]:
+    """The keys of the object literal the console builds for a create, starting
+    at its `external_id` entry (`marker`) and ending at its `idempotency_key`."""
+    start = js.index(marker)
+    end = js.index('idempotency_key:Cn("idem")', start)
+    return set(re.findall(r"(?:^|,)(\w+):", js[start:end] + 'idempotency_key:Cn("idem")'))
+
+
+def test_bundle_create_body_keys_are_all_accepted_by_the_door():
+    """The console builds the body of each create (`POST /api/projects/<code>/
+    {work-items,modules,cycles}`, `POST /api/initiatives`) key by key. The door
+    refuses a key it does not know, naming it, so a rebuild against a newer Caelos
+    commit that sends a new key fails here instead of in a user's first task."""
+    from hyperspace.http import console_writes
+    from hyperspace.tools.work_items import CONSOLE_ROW_FIELDS
+
+    js = _all_built_js_text()
+    work_item_marker = 'external_id:i.external_id??Cn("wi")'
+    # keys the builder adds one at a time after the literal: module, parent, doc paths
+    tail = js[js.index(work_item_marker):][:900]
+    tail = tail[: tail.index('k==="modules"')]
+    work_item_keys = _create_body_keys(js, work_item_marker) | set(re.findall(r"\bP\.(\w+)=", tail))
+
+    sent = {
+        "work item": (work_item_keys, CONSOLE_ROW_FIELDS - {"project"}),
+        "module": (_create_body_keys(js, 'external_id:i.external_id??Cn("mod")'), console_writes.MODULE_KEYS),
+        "cycle": (_create_body_keys(js, 'external_id:i.external_id??Cn("cy")'), console_writes.CYCLE_KEYS),
+        "initiative": (_create_body_keys(js, 'external_id:i.external_id||Cn("init")'), console_writes.INITIATIVE_KEYS),
+    }
+    for kind, (keys, accepted) in sent.items():
+        assert {"external_id", "idempotency_key"} <= keys, f"{kind}: the create body builder was not read correctly: {sorted(keys)}"
+        assert keys <= accepted, f"the bundle's {kind} create sends keys the door refuses: {sorted(keys - accepted)}"
+    assert {"module", "parent_work_item", "source_references"} <= work_item_keys

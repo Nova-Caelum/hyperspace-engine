@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ..store import Store
-from .routes import route_get, route_mcp, route_patch
+from .routes import route_delete, route_get, route_mcp, route_patch, route_post
 
 _LOOPBACK_HOSTS = ("127.0.0.1", "localhost")
 
@@ -178,6 +178,16 @@ class DoorRequestHandler(BaseHTTPRequestHandler):
         self._write_json(status, body)
 
     def do_POST(self) -> None:
+        if self.path.startswith("/api/"):
+            request_obj = self._read_json_body()
+            store = self._open_store()
+            try:
+                status, body = route_post(store, self.path, request_obj)
+            finally:
+                store.close()
+            self._write_json(status, body)
+            return
+
         if self.path != "/mcp":
             self._write_json(404, {"error": f"not found: {self.path}"})
             return
@@ -189,6 +199,15 @@ class DoorRequestHandler(BaseHTTPRequestHandler):
         finally:
             store.close()
         self._write_json(200, response)
+
+    def do_DELETE(self) -> None:
+        self._read_json_body()  # drained: the connection is kept alive
+        store = self._open_store()
+        try:
+            status, body = route_delete(store, self.path)
+        finally:
+            store.close()
+        self._write_json(status, body)
 
 
 # ── construction / lifecycle helpers ────────────────────────────────────────
