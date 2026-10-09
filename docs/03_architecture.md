@@ -65,8 +65,8 @@ Code's dependency resolver reads) and `v<version>`.
 **The session-start hook** (`hooks/`) is what keeps the loop from going silent across a session
 boundary. `hooks/session-start.sh` prints the `acing-hyperspace` primer (frontmatter stripped) on
 every `SessionStart` and a setup-state line (never set up, or set up without an environment) — work
-that needs no Python — then finds an interpreter (`python3`, `python`, `py -3`, each executed before it
-is trusted; never the project's own `.hyperspace/env`, which a downloaded folder can plant) and runs
+that needs no Python — then finds an interpreter (`python3`, `python`, `py -3`, then `python3.13`/`.12`/`.11` on PATH or in `~/.local/bin`,
+each executed before it is trusted; never the project's own `.hyperspace/env`, which a downloaded folder can plant) and runs
 `hooks/session_start.py`:
 one status line per active run under `hyperspace/runs/`, bumping the `fresh_sessions`/`compactions`
 budget counters on `startup`/`compact` by calling `bin/loop_state.py`'s own `bump`/`notify` verbs, and

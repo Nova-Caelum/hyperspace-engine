@@ -543,7 +543,7 @@ class InterpreterResolutionTests(HookHarness):
         self.assertRan(result)
         self.assertFalse(marker.exists(), "the project's own interpreter was started as a last resort")
         self.assertNotIn("goal=no-system-python-goal", result.stdout)
-        self.assertIn("No Python 3.11+ found (tried python3, python, py -3)", result.stdout)
+        self.assertIn("No Python 3.11+ found (tried python3, python, py -3, python3.13/.12/.11)", result.stdout)
         self.assertNotIn("project environment", result.stdout)
         delivered, begin_count, end_count = _extract_delivered_block(result.stdout)
         self.assertEqual((1, 1), (begin_count, end_count))
@@ -604,6 +604,40 @@ class InterpreterResolutionTests(HookHarness):
         self.assertRan(result)
         self.assertIn("goal=py-goal", result.stdout)
         self.assertEqual(1, self.fresh_sessions_used(state_path))
+
+    def test_a_versioned_python_on_path_is_used_when_python3_is_too_old(self) -> None:
+        """macOS ships a 3.9 `python3`; uv links only `python3.12`. The hook must
+        still find a 3.11+ Python and print the active-run block."""
+        state_path = self.init_run("versioned-goal")
+        _write_shim(self.tmp_path / "old-bin" / "python3", "exit 1\n")  # 3.9: fails the >= 3.11 probe
+        _python_shim(self.tmp_path / "new-bin" / "python3.12")
+        result = self.run_hook(source="startup", path_dirs=[self.tmp_path / "old-bin", self.tmp_path / "new-bin"])
+        self.assertRan(result)
+        self.assertIn("goal=versioned-goal", result.stdout)
+        self.assertEqual(1, self.fresh_sessions_used(state_path))
+        self.assertNotIn("No Python 3.11+ found", result.stdout)
+
+    def test_a_versioned_python_in_home_local_bin_is_used_though_it_is_not_on_path(self) -> None:
+        """uv's links live in ~/.local/bin, which a hook's PATH may lack. Found by
+        explicit path (a user-owned folder), and still never the project's env."""
+        state_path = self.init_run("home-goal")
+        marker = self.tmp_path / "planted-interpreter-started"
+        _planted_interpreter(self.project_dir / ".hyperspace" / "env", marker)
+        _python_shim(self.home / ".local" / "bin" / "python3.12")
+        result = self.run_hook(source="startup", path_dirs=[])
+        self.assertRan(result)
+        self.assertFalse(marker.exists(), "the project's own interpreter was started")
+        self.assertIn("goal=home-goal", result.stdout)
+        self.assertEqual(1, self.fresh_sessions_used(state_path))
+
+    def test_a_versioned_python_that_is_too_old_is_skipped_too(self) -> None:
+        self.init_run("old-versioned-goal")
+        _write_shim(self.tmp_path / "old-bin" / "python3.11", "exit 1\n")
+        _write_shim(self.home / ".local" / "bin" / "python3.13", "exit 1\n")
+        result = self.run_hook(source="startup", path_dirs=[self.tmp_path / "old-bin"])
+        self.assertRan(result)
+        self.assertNotIn("goal=old-versioned-goal", result.stdout)
+        self.assertIn("No Python 3.11+ found", result.stdout)
 
     def test_too_old_python_is_skipped(self) -> None:
         self.init_run("old-goal")

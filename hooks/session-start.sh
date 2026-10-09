@@ -38,7 +38,11 @@ python_ok() {
 }
 
 # Sets PY (and PY_ARG, for `py -3`) to the first interpreter python_ok
-# accepts, in this order: python3, python, then the Windows `py` launcher.
+# accepts, in this order: python3, python, the Windows `py` launcher, then the
+# versioned names python3.13, python3.12, python3.11 — on PATH, then by explicit
+# path in $HOME/.local/bin (where uv links them, and which a hook's PATH may
+# lack). A Mac's own `python3` is 3.9 and fails python_ok, so without the
+# versioned names the hook would find nothing there.
 #
 # The project's own `.hyperspace/env` is deliberately NOT a candidate. This hook
 # runs on every SessionStart in every folder Claude Code opens, and a folder can
@@ -60,6 +64,23 @@ find_python() {
         PY="$candidate"
         PY_ARG="-3"
         return 0
+    fi
+    versioned="python3.13 python3.12 python3.11"
+    for name in $versioned; do
+        candidate="$(command -v "$name" 2>/dev/null)"
+        if [ -n "$candidate" ] && python_ok "$candidate"; then
+            PY="$candidate"
+            return 0
+        fi
+    done
+    if [ -n "${HOME:-}" ]; then
+        for name in $versioned; do
+            candidate="$HOME/.local/bin/$name"
+            if { [ -f "$candidate" ] || [ -f "$candidate.exe" ]; } && python_ok "$candidate"; then
+                PY="$candidate"
+                return 0
+            fi
+        done
     fi
     return 1
 }
@@ -94,7 +115,7 @@ main() {
     fi
 
     if ! find_python; then
-        printf '⚠️ No Python 3.11+ found (tried python3, python, py -3) — skipping the active-run and worklog blocks.\n'
+        printf '⚠️ No Python 3.11+ found (tried python3, python, py -3, python3.13/.12/.11) — skipping the active-run and worklog blocks.\n'
         return 0
     fi
 
