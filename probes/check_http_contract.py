@@ -2,15 +2,20 @@
 """T4.2 verdict check: the loopback door serves the console's contract.
 
 Two sub-checks, both must PASS:
-  (a) `tests/test_http.py` passes under the repo's own venv.
+  (a) `tests/test_http.py` and `tests/test_http_console.py` pass under the
+      repo's own venv.
   (b) a live smoke: `hyperspace init` in a temp dir, seed one project/module/
-      work item/cycle/initiative/worklog entry through `call_tool`, launch
-      `hyperspace serve --port <free>` as a real subprocess, hit every read
-      route and every `POST /mcp` `tools/call` this row's acceptance text
-      names, confirm `GET /` returns HTML, and confirm the bound address is
-      `127.0.0.1` (a successful loopback connect, plus a best-effort
-      `lsof`/`netstat` listener line recorded as evidence that it is not
-      `0.0.0.0`) — then terminate the subprocess.
+      work item/cycle/initiative/worklog entry through `call_tool` (and two
+      run folders on disk), launch `hyperspace serve --port <free>` as a real
+      subprocess, hit every read route (the worklog and the project's runs
+      among them), every `POST /mcp` `tools/call` this row's acceptance text
+      names, and every write the console's REST layer sends (the creates, the
+      initiative edit and link, a forced bad create that must answer with a
+      readable `error`, and the two writes the engine does not serve, which
+      must answer 501), confirm `GET /` returns HTML, and confirm the bound
+      address is `127.0.0.1` (a successful loopback connect, plus a
+      best-effort `lsof`/`netstat` listener line recorded as evidence that
+      it is not `0.0.0.0`) — then terminate the subprocess.
 
 Usage: probes/check_http_contract.py --out <path>
 """
@@ -34,6 +39,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 from hyperspace.venv_paths import find_venv_python  # noqa: E402
+
+
+PYTEST_FILES = ("tests/test_http.py", "tests/test_http_console.py")
 
 
 def _trim(text: str | None, limit: int = 4000) -> str:
@@ -60,7 +68,7 @@ def _hyperspace_bin() -> Path:
 def check_pytest(evidence: dict) -> bool:
     python = _venv_python()
     proc = subprocess.run(
-        [str(python), "-m", "pytest", "tests/test_http.py", "-q"],
+        [str(python), "-m", "pytest", *PYTEST_FILES, "-q"],
         cwd=ROOT, capture_output=True, encoding="utf-8", errors="replace",
     )
     summary_line = ""
@@ -69,7 +77,7 @@ def check_pytest(evidence: dict) -> bool:
             summary_line = line.strip()
             break
     evidence["pytest"] = {
-        "command": f"{python} -m pytest tests/test_http.py -q",
+        "command": f"{python} -m pytest {' '.join(PYTEST_FILES)} -q",
         "exit_code": proc.returncode,
         "summary_line": summary_line,
         "stdout": _trim(proc.stdout),
@@ -116,6 +124,19 @@ def _http_post_mcp(base_url: str, name: str, arguments: dict) -> tuple[int, dict
     req = urllib.request.Request(
         base_url + "/mcp", data=payload, method="POST",
         headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            return resp.status, json.loads(resp.read())
+    except urllib.error.HTTPError as exc:
+        return exc.code, json.loads(exc.read())
+
+
+def _http_json(base_url: str, method: str, path: str, body: dict | None = None) -> tuple[int, object]:
+    """One REST write (or read) with a JSON body; `(status, parsed body)`."""
+    data = None if body is None else json.dumps(body).encode("utf-8")
+    req = urllib.request.Request(
+        base_url + path, data=data, method=method, headers={"Content-Type": "application/json"},
     )
     try:
         with urllib.request.urlopen(req, timeout=5) as resp:
@@ -172,6 +193,12 @@ def _seed(db_path: Path) -> dict:
         "author": "probe", "project": "http-check", "summary": "Seeded the live-smoke store.",
     })
     store.close()
+    for slug, status, node in (("open-run", "deciding", "deciding"), ("closed-run", "done", "executing")):
+        run_dir = db_path.parent.parent / "hyperspace" / "runs" / slug
+        run_dir.mkdir(parents=True)
+        (run_dir / "loop.state.json").write_text(
+            json.dumps({"goal_slug": slug, "status": status, "current_node": node}), encoding="utf-8",
+        )
     return wi["row"]
 
 
@@ -222,12 +249,27 @@ def check_live_smoke(evidence: dict) -> bool:
                 f"/api/work-items/{wi_row['external_id']}",
                 "/api/initiatives",
                 "/api/initiatives/http-check-init",
+                "/api/worklog",
+                "/api/worklog?project=http-check",
+                "/api/projects/http-check/runs",
             ]
             for path in get_routes:
                 status, _ctype, body = _http_get(base_url, path)
                 route_table[f"GET {path}"] = f"{status} {_top_level_shape(body)}"
                 if status != 200:
                     all_ok = False
+
+            # the runs read must mark the open run open and the closed one closed
+            _status, _ctype, runs_body = _http_get(base_url, "/api/projects/http-check/runs")
+            runs = json.loads(runs_body) if _status == 200 else []
+            open_by_goal = {r.get("goal"): r.get("open") for r in runs}
+            route_table["runs open flags"] = json.dumps(open_by_goal, sort_keys=True)
+            if open_by_goal != {"open-run": True, "closed-run": False}:
+                all_ok = False
+            _status, _ctype, log_body = _http_get(base_url, "/api/worklog?project=http-check")
+            log_rows = json.loads(log_body) if _status == 200 else []
+            if not log_rows or not all(r.get("project") == "http-check" for r in log_rows):
+                all_ok = False
 
             # initiative links — needs the initiative's row id from the item read above
             status, _ctype, init_body = _http_get(base_url, "/api/initiatives/http-check-init")
@@ -247,6 +289,64 @@ def check_live_smoke(evidence: dict) -> bool:
             route_table["GET /api/does-not-exist"] = f"{status} {ctype}"
             if status != 404 or "error" not in _top_level_shape(body):
                 all_ok = False
+
+            # the console's REST writes (Caelos App.tsx `api()` bodies): each must be 2xx
+            project = "http-check"
+            console_writes = [
+                ("POST", f"/api/projects/{project}/work-items", {
+                    "external_id": "wi-console-1", "name": "Console task", "type": "task", "state": "ready",
+                    "description": "Made from the console.", "acceptance_criteria": "The task shows in the list.",
+                    "acceptance_criteria_ref": None, "assignee_agent": None, "team": [], "idempotency_key": "idem-wi",
+                }),
+                ("POST", f"/api/projects/{project}/modules", {
+                    "external_id": "mod-console-1", "name": "Console module", "description": None,
+                    "acceptance_criteria": "Every task under it reaches done.", "acceptance_criteria_ref": None,
+                    "state": "pending-review", "team": [], "folder_path": None, "idempotency_key": "idem-mod",
+                }),
+                ("POST", f"/api/projects/{project}/cycles", {
+                    "external_id": "cy-console-1", "name": "Console cycle", "description": None,
+                    "state": "planned", "start_date": None, "end_date": None, "idempotency_key": "idem-cy",
+                }),
+                ("POST", "/api/initiatives", {
+                    "external_id": "init-console-1", "title": "Console initiative", "description": None,
+                    "state": "planned", "idempotency_key": "idem-init",
+                }),
+                ("PATCH", "/api/initiatives/init-console-1", {"state": "archived"}),
+            ]
+            for method, path, body in console_writes:
+                status, got = _http_json(base_url, method, path, body)
+                route_table[f"{method} {path}"] = str(status)
+                if status != 200:
+                    all_ok = False
+            if init_id:
+                status, _got = _http_json(base_url, "POST", f"/api/initiatives/{init_id}/links", {
+                    "link_type": "module", "target_id": "mod-console-1",
+                })
+                route_table["POST /api/initiatives/<id>/links"] = str(status)
+                if status != 200:
+                    all_ok = False
+
+            # a forced bad create answers with the tool's own readable message
+            status, got = _http_json(base_url, "POST", f"/api/projects/{project}/modules", {
+                "external_id": "mod-bad", "name": "Bad", "acceptance_criteria": "nope",
+            })
+            message = got.get("error") if isinstance(got, dict) else None
+            route_table["POST modules (bad criteria)"] = f"{status} error={message!r}"
+            if status != 400 or not isinstance(message, str) or "acceptance_criteria must be" not in message:
+                all_ok = False
+
+            # the two writes with no tool behind them say so
+            for label, method, path, body in (
+                ("POST /api/work-items/<id>/promote-to-module", "POST",
+                 "/api/work-items/wi-console-1/promote-to-module", {"module_name": "M"}),
+                ("DELETE /api/initiatives/<id>/links/<type>/<target>", "DELETE",
+                 f"/api/initiatives/{init_id}/links/module/mod-console-1", None),
+            ):
+                status, got = _http_json(base_url, method, path, body)
+                message = got.get("error") if isinstance(got, dict) else None
+                route_table[f"{label} (unserved)"] = str(status)
+                if status != 501 or not isinstance(message, str) or not message:
+                    all_ok = False
 
             # POST /mcp — the four tools the acceptance text names
             mcp_calls = [

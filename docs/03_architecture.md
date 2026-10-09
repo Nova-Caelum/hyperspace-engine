@@ -129,7 +129,7 @@ setup skill, together with its dependencies (`pydantic`, `pydantic-graph`, `pyda
 | `verify/` | The closure verifier: `complete_workitem` as a `pydantic_graph` graph — `Vet → CriteriaQuality → Landing → EvidenceJudge → Commit`. Evidence is a delta since the row's filing. |
 | `judge/` | The judge runners behind the verifier's two semantic steps: `openrouter`, `anthropic` (both through pydantic-ai), `claude-code`, `codex` (both through their CLIs), and `none`. |
 | `mcp/` | The stdio MCP server. Lists `complete_workitem` plus every graph tool, answers against the store, and starts the loopback door on first use. |
-| `http/` | The loopback door (`server.py`) and its routes (`routes.py`): REST reads under `/api/…`, JSON-RPC writes on `POST /mcp`, the console page on `/`. |
+| `http/` | The loopback door (`server.py`) and its routes (`routes.py`): REST reads under `/api/…` (the worklog at `/api/worklog`, a project's runs at `/api/projects/<code>/runs`), the console's writes (`POST /api/…` creates and links, `PATCH`, JSON-RPC on `POST /mcp`), the console page on `/`. |
 | `setup/` | Provisioning (`provision.py`), the stdlib-only bootstrap entrypoint (`python -m hyperspace.setup`), `doctor`, and the three launcher templates. |
 | `cli.py` · `worklog_cli.py` · `config.py` | The `hyperspace` command (`init`, `serve`, `doctor`, `worklog`) and `.hyperspace/config.toml` (`judge`, `model`, `port`, `user`). |
 
@@ -195,7 +195,7 @@ The MCP tool is not a third way to close a row. `upsert_work_item` refuses `stat
 on update, before it writes anything, and tells the agent to run `complete_workitem` or ask the user.
 Which label a closure carries is decided by the code path, never by a field in the request: the stdio
 MCP server calls the tool table as an agent, and only the loopback door's own handlers
-(`hyperspace/http/routes.py`: `route_mcp` for `/mcp`, `route_patch` for the PATCH) write as the console.
+(`hyperspace/http/routes.py`: `route_mcp` for `/mcp`, `route_post` for the REST creates, `route_patch` for the PATCH — all reaching the tool table through `_call_as_console`) write as the console.
 
 ---
 

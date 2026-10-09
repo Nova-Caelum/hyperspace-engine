@@ -7,9 +7,8 @@ from pathlib import Path
 from ..config import load_config
 from ..store import Store
 from .registry import ToolError
+from .work_items import check_criteria_text
 
-_MODULE_CRITERIA_MIN = 20
-_MODULE_CRITERIA_MAX = 2000
 _WORKLOG_SUMMARY_MAX = 280
 
 
@@ -25,15 +24,8 @@ def upsert_module(
     """Mirrors the module contract's 20-2000 character rule on
     `acceptance_criteria` — the vendored `CandidateWorkItem` contract has no
     module counterpart, so this length check is this tool's own, applied the
-    same way."""
-    if acceptance_criteria is not None and not (
-        _MODULE_CRITERIA_MIN <= len(acceptance_criteria) <= _MODULE_CRITERIA_MAX
-    ):
-        raise ToolError(
-            "validation",
-            f"acceptance_criteria must be {_MODULE_CRITERIA_MIN}-{_MODULE_CRITERIA_MAX} "
-            f"characters (got {len(acceptance_criteria)})",
-        )
+    same way (`work_items.check_criteria_text`)."""
+    check_criteria_text(acceptance_criteria)
 
     parent_module_id = None
     if parent_module is not None:
