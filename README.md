@@ -115,7 +115,7 @@ between judges are in [`docs/05_design_rationale.md`](docs/05_design_rationale.m
 
 ## Platform support
 
-| Platform | v0.1.4 |
+| Platform | v1.0.0 |
 |---|---|
 | macOS | Verified end to end: public-marketplace install through a verifier-closed row read back from the console |
 | Linux | CI: the full test suite, real provisioning, the MCP server, and the real `claude` binary starting it and running the session hook |
@@ -129,7 +129,7 @@ Another Claude Code plugin can depend on this one. In its `.claude-plugin/plugin
 
 ```json
 "dependencies": [
-  { "name": "hyperspace-engine", "marketplace": "hyperspace-engine", "version": "^0.1" }
+  { "name": "hyperspace-engine", "marketplace": "hyperspace-engine", "version": "^1.0" }
 ]
 ```
 

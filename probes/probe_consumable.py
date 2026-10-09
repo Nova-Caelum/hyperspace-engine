@@ -15,7 +15,7 @@ Three sub-checks, all must PASS for result PASS:
         discipline `probe_whole_path.py`'s `--stop-before session` applies.
   (iii) a throwaway consumer plugin — `.claude-plugin/plugin.json` declaring
         `{"name": "hyperspace-engine", "marketplace": "hyperspace-engine",
-        "version": "^0.1"}` — installed in a fresh `CLAUDE_CONFIG_DIR` after
+        "version": "^1.0"}` — installed in a fresh `CLAUDE_CONFIG_DIR` after
         adding both marketplaces, checked via `claude plugin list --json` and
         `claude plugin details`. Recorded verbatim, whatever the outcome:
         this repo's own empirical read (this row, 2026-09-27, `claude`
@@ -127,7 +127,7 @@ def _write_consumer_plugin(consumer_dir: Path) -> None:
         "version": "0.0.1",
         "description": "throwaway consumability probe fixture — never committed, never published",
         "dependencies": [
-            {"name": "hyperspace-engine", "marketplace": ENGINE_MARKETPLACE, "version": "^0.1"}
+            {"name": "hyperspace-engine", "marketplace": ENGINE_MARKETPLACE, "version": "^1.0"}
         ],
     }), encoding="utf-8")
 
