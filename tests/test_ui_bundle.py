@@ -127,12 +127,24 @@ def test_bundle_patch_body_keys_are_all_accepted_by_the_door():
     assert "state" in sent  # the key that closes a task
 
 
-def _create_body_keys(js: str, marker: str) -> set[str]:
-    """The keys of the object literal the console builds for a create, starting
-    at its `external_id` entry (`marker`) and ending at its `idempotency_key`."""
-    start = js.index(marker)
-    end = js.index('idempotency_key:Cn("idem")', start)
-    return set(re.findall(r"(?:^|,)(\w+):", js[start:end] + 'idempotency_key:Cn("idem")'))
+# The create builders are located by shape, not by minified name: a rebuild renames
+# the minifier's identifiers (`Cn`, `k`, `P` at dfcb46d) without changing the code.
+_IDEM_END = re.compile(r'idempotency_key:\w+\("idem"\)')
+
+
+def _create_body(js: str, prefix: str) -> re.Match:
+    """The create body literal whose `external_id` default is `<idempKey>("<prefix>")`."""
+    match = re.search(rf'(\w+)=\{{external_id:\w+\.external_id(?:\?\?|\|\|)\w+\("{prefix}"\)', js)
+    assert match, f"could not locate the console's {prefix!r} create body builder in ui/dist"
+    return match
+
+
+def _create_body_keys(js: str, prefix: str) -> set[str]:
+    """The keys of the object literal the console builds for a create, from its
+    `external_id` entry through its `idempotency_key`."""
+    start = _create_body(js, prefix).start()
+    end = _IDEM_END.search(js, start).end()
+    return set(re.findall(r"(?:\{|,)(\w+):", js[start:end]))
 
 
 def test_bundle_create_body_keys_are_all_accepted_by_the_door():
@@ -144,17 +156,18 @@ def test_bundle_create_body_keys_are_all_accepted_by_the_door():
     from hyperspace.tools.work_items import CONSOLE_ROW_FIELDS
 
     js = _all_built_js_text()
-    work_item_marker = 'external_id:i.external_id??Cn("wi")'
+    work_item = _create_body(js, "wi")
+    body_var = work_item.group(1)
     # keys the builder adds one at a time after the literal: module, parent, doc paths
-    tail = js[js.index(work_item_marker):][:900]
-    tail = tail[: tail.index('k==="modules"')]
-    work_item_keys = _create_body_keys(js, work_item_marker) | set(re.findall(r"\bP\.(\w+)=", tail))
+    tail = js[work_item.start():][:900]
+    tail = tail[: re.search(r'\w+==="modules"', tail).start()]
+    work_item_keys = _create_body_keys(js, "wi") | set(re.findall(rf"\b{body_var}\.(\w+)=", tail))
 
     sent = {
         "work item": (work_item_keys, CONSOLE_ROW_FIELDS - {"project"}),
-        "module": (_create_body_keys(js, 'external_id:i.external_id??Cn("mod")'), console_writes.MODULE_KEYS),
-        "cycle": (_create_body_keys(js, 'external_id:i.external_id??Cn("cy")'), console_writes.CYCLE_KEYS),
-        "initiative": (_create_body_keys(js, 'external_id:i.external_id||Cn("init")'), console_writes.INITIATIVE_KEYS),
+        "module": (_create_body_keys(js, "mod"), console_writes.MODULE_KEYS),
+        "cycle": (_create_body_keys(js, "cy"), console_writes.CYCLE_KEYS),
+        "initiative": (_create_body_keys(js, "init"), console_writes.INITIATIVE_KEYS),
     }
     for kind, (keys, accepted) in sent.items():
         assert {"external_id", "idempotency_key"} <= keys, f"{kind}: the create body builder was not read correctly: {sorted(keys)}"
