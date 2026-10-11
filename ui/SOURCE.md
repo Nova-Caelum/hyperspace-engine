@@ -7,15 +7,15 @@ this build.
 
 - **Repo:** `Nova-Caelum/Caelos` (public), `origin/main` at the time of this
   build.
-- **Pinned commit:** `dfcb46d5e0402c049122dc443b85955caf37bc8d` (short: `dfcb46d`)
-- **Built:** 2026-09-27T07:19:40Z
+- **Pinned commit:** `739f1fad25ff5a3de6acac170dca3c431d0cbfd8` (short: `739f1fa`, Caelos#34 squash merge)
+- **Built:** 2026-10-11T19:25:58Z
 - **Node:** v22.23.1
 - **npm:** 10.9.8
 - **Commands:**
   ```sh
   git clone --no-checkout <repo> <build-dir>
   cd <build-dir>
-  git checkout dfcb46d
+  git checkout 739f1fa
   npm ci
   VITE_API_BASE_URL=. VITE_HUMAN_OWNER=user npm run build
   ```
@@ -38,11 +38,11 @@ this build.
   `probes/check_ui_build.py`'s reproducibility rebuild invokes this same
   `ui/build.sh`, so it inherits the identical env and produces a
   byte-identical bundle — the hashes do not diverge.
-- **Bundle size:** 728K total (`du -sh ui/dist`)
+- **Bundle size:** 768K total (`du -sh ui/dist`)
 - **File count:** 4 files
 - **Largest three assets:**
-  1. `assets/index-Cw8nVcU0.js` — 528K
-  2. `assets/index-Bka4lujK.css` — 144K
+  1. `assets/index-DSxbvgDz.js` — 552K
+  2. `assets/index-DrGz4s1R.css` — 160K
   3. `assets/nova-caelum-wordmark-transparent-wusR2g40.png` — 52K
 
 ## Known finding — mock sentinel is bundled as dead code
@@ -71,5 +71,5 @@ Run `ui/build.sh` (optionally `--source <path-or-url>`, `--commit <sha>`,
 replace `ui/dist/` (or another `--out` directory) wholesale.
 
 **Honest caveat:** this bundle drifts from the live Caelos console the
-moment `main` moves past `dfcb46d`. Re-run `ui/build.sh` (optionally with a
+moment `main` moves past `739f1fa`. Re-run `ui/build.sh` (optionally with a
 newer `--commit`) to refresh it; nothing here refreshes automatically.

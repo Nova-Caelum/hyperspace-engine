@@ -5,7 +5,7 @@
 #
 #   --source   Clone source: a local path (used as a local clone source, no
 #              network) or a git URL. Default: the public Caelos repo.
-#   --commit   Commit to pin the build to. Default: dfcb46d (the commit this
+#   --commit   Commit to pin the build to. Default: 739f1fa (the commit this
 #              shipped bundle was built from — see ui/SOURCE.md).
 #   --out      Output directory to replace wholesale with the fresh build.
 #              Default: ui/dist (relative to this script's repo root).
@@ -16,7 +16,7 @@
 set -eu
 
 SOURCE="https://github.com/Nova-Caelum/Caelos.git"
-COMMIT="dfcb46d"
+COMMIT="739f1fa"
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 OUT="$SCRIPT_DIR/dist"
 
