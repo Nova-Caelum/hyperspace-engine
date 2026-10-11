@@ -8,6 +8,10 @@
   },
   "homepage": "https://github.com/Nova-Caelum/hyperspace-engine",
   "repository": "https://github.com/Nova-Caelum/hyperspace-engine",
+  "documentationUrl": "https://github.com/Nova-Caelum/hyperspace-engine#readme",
+  "supportUrl": "https://github.com/Nova-Caelum/hyperspace-engine/issues",
+  "privacyPolicyUrl": "https://novacaelum.com/privacy",
+  "termsOfServiceUrl": "https://novacaelum.com/terms",
   "license": "MIT",
   "keywords": [
     "agents",
