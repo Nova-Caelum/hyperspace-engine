@@ -3,13 +3,14 @@ interpreter on each OS, and the one path every caller names on every OS.
 
 A venv keeps its interpreter at `bin/python` on macOS and Linux and at
 `Scripts\\python.exe` on Windows. Rather than teach every caller that
-difference — `.mcp.json` (which has no per-platform field), each skill's
-commands, the launchers, the docs — provisioning makes ONE spelling true
-everywhere: `env/bin/python`. It is native on POSIX; on Windows `env/bin` is a
-directory junction to `env/Scripts`, and every Windows spawner resolves the
-extensionless name to `python.exe` (Claude Code's MCP spawner, CreateProcess,
-libuv, cmd, PowerShell 5.1/7 and Git Bash — verified on a `windows-latest`
-runner; see `docs/reference/tripwires.md`, "the `env/bin` contract").
+difference — each skill's commands, the launchers, the docs — provisioning
+makes ONE spelling true everywhere: `env/bin/python`. It is native on POSIX;
+on Windows `env/bin` is a directory junction to `env/Scripts`, and every
+Windows spawner resolves the extensionless name to `python.exe`
+(CreateProcess, libuv, cmd, PowerShell 5.1/7 and Git Bash — verified on a
+`windows-latest` runner; see `docs/reference/tripwires.md`, "the `env/bin`
+contract"). The MCP server is the exception since v1.0.3:
+`hyperspace/provenance.py` starts the native interpreter.
 
 Stdlib only, and imported by `hyperspace.setup.provision` — which must run on
 a bare interpreter before any of this project's dependencies are installed.
@@ -35,8 +36,8 @@ def native_python(env_dir: str | Path, platform: str | None = None) -> Path:
 
 
 def portable_python(env_dir: str | Path) -> Path:
-    """`env/bin/python` — the spelling `.mcp.json`, the skills and the POSIX
-    launchers use on every OS. Extensionless on purpose: on Windows it
+    """`env/bin/python` — the spelling the skills and the POSIX launchers use
+    on every OS. Extensionless on purpose: on Windows it
     resolves to `env\\bin\\python.exe` through the junction
     `link_bin_to_scripts` creates."""
     return Path(env_dir) / "bin" / "python"

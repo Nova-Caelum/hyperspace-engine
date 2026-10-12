@@ -12,16 +12,22 @@ local marketplace into a fresh `CLAUDE_CONFIG_DIR`, then
      hook, whose output (read back from `--debug-file`) says to run
      `hyperspace-setup`;
   2. setup — the project's `.hyperspace/env` is really provisioned
-     (`provision_env`), and a loop run is opened with the skills' own command
-     form, `.hyperspace/env/bin/python "<plugin>/bin/loop_state.py" init …`;
+     (`provision_env`, which records it in `~/.hyperspace/envs.json`), and a
+     loop run is opened with the skills' own command form,
+     `.hyperspace/env/bin/python "<plugin>/bin/loop_state.py" init …`;
   3. after setup — `claude mcp list` shows the server `Connected` (Claude
-     Code's own spawner resolving `.mcp.json`'s command on this OS), and
+     Code's own spawner resolving `.mcp.json`'s command on this OS: the
+     installed plugin's `bin/hyperspace-env`, or `.cmd` on Windows, which
+     starts the env only because setup recorded it), and
      `claude --init-only` runs the hook successfully: primer delivered, and
      the run's `fresh_sessions` counter bumped to 1 by the hook's Python half.
 
 No model call, no `claude -p`, no credentials: `mcp list`, `plugin install`
 and `--init-only` all run unauthenticated (WINDOWS_FACTS F13, F14). The
-project path contains a space. Not part of `all` — it needs `claude` on PATH.
+project path contains a space, and `~` (HOME, USERPROFILE) is a scratch folder
+for the whole probe, so setup's record lands there and the server `claude`
+starts reads it from there (`probes/_scratch_home.py`). Not part of `all` —
+it needs `claude` on PATH.
 
 Usage: imported by probes/run.py; PROBE = "claude_runtime"; run(out_dir, opts) -> bool.
 """
@@ -37,6 +43,7 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _scratch_home import scratch_home  # noqa: E402
 from _verdict import write_verdict  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -103,7 +110,7 @@ def run(out_dir, opts) -> bool:
         return False
 
     evidence: dict = {"platform": sys.platform}
-    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp, scratch_home(Path(tmp) / "home"):
         tmp_path = Path(tmp)
         config_dir = tmp_path / "claude-config"
         config_dir.mkdir()

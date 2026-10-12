@@ -2,12 +2,15 @@
 
 Covers: manifests parse with the exact names/versions; `hyperspace.__version__`
 agrees with `plugin.json` and `pyproject.toml`; the CLI's `--version` and
-unknown-subcommand paths; `.mcp.json`'s command — since v0.1.3 the project
-env's own interpreter at the one spelling valid on every OS,
-`.hyperspace/env/bin/python`, spawned with no shell (Windows cannot spawn a
-`#!/bin/sh` launcher; WINDOWS_FACTS F1-F4).
+unknown-subcommand paths; `.mcp.json`'s command — since v1.0.3 the plugin's
+own `bin/hyperspace-env`, spelled `${CLAUDE_PLUGIN_ROOT}/<file>` with nothing
+computed, which starts the project's env only through
+`hyperspace/provenance.py` (tests/test_provenance.py). Claude Code runs it as
+a `#!/bin/sh` script on macOS/Linux and runs the sibling `.cmd` on Windows.
 """
 import json
+import os
+import shutil
 import subprocess
 import sys
 import tomllib
@@ -15,7 +18,6 @@ from pathlib import Path
 
 import pytest
 
-from hyperspace.venv_paths import link_bin_to_scripts, portable_python
 from probes._mcp_launch import mcp_launch
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -44,7 +46,7 @@ def test_marketplace_json_shape():
 def test_plugin_json_shape():
     data = _read_json(".claude-plugin/plugin.json")
     assert data["name"] == "hyperspace-engine"
-    assert data["version"] == "1.0.2"
+    assert data["version"] == "1.0.3"
     assert isinstance(data["description"], str) and data["description"]
     assert data["author"]["name"] == "Nova Caelum"
     assert data["author"]["url"] == "https://novacaelum.com"
@@ -57,47 +59,85 @@ def test_mcp_json_shape():
     data = _read_json(".mcp.json")
     assert set(data["mcpServers"].keys()) == {"hyperspace"}
     entry = data["mcpServers"]["hyperspace"]
-    assert entry["command"] == "${CLAUDE_PROJECT_DIR}/.hyperspace/env/bin/python"
-    assert entry["args"] == ["-m", "hyperspace.mcp"]
+    assert entry["command"] == "${CLAUDE_PLUGIN_ROOT}/bin/hyperspace-env"
+    assert entry["args"] == ["-P", "-m", "hyperspace.mcp"]
     assert "env" not in entry
 
 
-def test_mcp_json_command_is_the_portable_env_interpreter(tmp_path):
-    project = tmp_path / "my project"
+def test_mcp_json_names_no_project_path():
+    """The Anthropic directory scan requires every command to be spelled
+    literally `${CLAUDE_PLUGIN_ROOT}/<file>`; a `${CLAUDE_PROJECT_DIR}` path
+    is also exactly what started a folder's own interpreter before 1.0.3."""
+    assert "${CLAUDE_PROJECT_DIR}" not in (ROOT / ".mcp.json").read_text(encoding="utf-8")
+
+
+def test_mcp_entry_files_exist_with_their_line_endings():
+    posix = (ROOT / "bin" / "hyperspace-env").read_bytes()
+    windows = (ROOT / "bin" / "hyperspace-env.cmd").read_bytes()
+    assert posix.startswith(b"#!/bin/sh\n") and b"\r" not in posix
+    assert windows.count(b"\n") == windows.count(b"\r\n") > 0, "hyperspace-env.cmd must be CRLF throughout"
+
+
+def test_mcp_entry_files_hand_over_to_provenance_and_name_nothing_in_the_project():
+    """Both entry files only find the computer's own Python and run
+    `provenance.py run`; no line of code (comments aside) names anything in
+    the project's `.hyperspace`. (They read CLAUDE_PROJECT_DIR only to pass
+    over a Python inside it — tests/test_provenance.py.)"""
+    for name, comment in (("hyperspace-env", "#"), ("hyperspace-env.cmd", "rem")):
+        code = [
+            line for line in (ROOT / "bin" / name).read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.lstrip().lower().startswith(comment)
+        ]
+        joined = "\n".join(code)
+        assert "provenance.py\" run -- " in joined, name
+        assert ".hyperspace" not in joined, name
+
+
+def test_posix_entry_file_is_executable_in_git():
+    if shutil.which("git") is None or not (ROOT / ".git").exists():
+        pytest.skip("not a git checkout, so there is no index mode to read")
+    entry = subprocess.run(
+        ["git", "-C", str(ROOT), "ls-files", "-s", "bin/hyperspace-env"],
+        capture_output=True, encoding="utf-8", check=True,
+    ).stdout
+    assert entry.startswith("100755 "), entry
+
+
+def test_mcp_json_command_is_the_plugins_launcher(tmp_path):
+    command, args = mcp_launch(ROOT, tmp_path / "my project")
+    expected = (ROOT / "bin" / "hyperspace-env").as_posix() + (".cmd" if sys.platform == "win32" else "")
+    assert command == expected
+    assert args == ["-P", "-m", "hyperspace.mcp"]
+
+
+def test_mcp_json_command_without_an_env_exits_missing_with_one_line(tmp_path):
+    """No environment, no Python started from the project: the launcher says
+    so in one line and exits 4 (Claude Code shows "failed to connect"; the
+    SessionStart hook names the fix too — tests/test_hooks.py)."""
+    project = tmp_path / "never set up"
+    project.mkdir()
     command, args = mcp_launch(ROOT, project)
-    assert command == portable_python(project / ".hyperspace" / "env").as_posix()
-    assert args == ["-m", "hyperspace.mcp"]
+    proc = subprocess.run(
+        [command, *args], cwd=str(project), env={**_scratch_env(tmp_path), "CLAUDE_PROJECT_DIR": str(project)},
+        stdin=subprocess.DEVNULL, capture_output=True, encoding="utf-8", errors="replace", timeout=120,
+    )
+    assert proc.returncode == 4, (proc.stdout, proc.stderr)
+    assert proc.stdout == ""
+    assert len(proc.stderr.strip().splitlines()) == 1
+    assert "hyperspace-setup" in proc.stderr
 
 
-def test_mcp_json_command_runs_the_env_interpreter_without_a_shell(tmp_path):
-    """A real venv in this OS's own layout, linked as provisioning links it;
-    the substituted command, spawned as an argv list (no shell — how Claude
-    Code spawns a stdio server), reaches that venv's interpreter."""
-    project = tmp_path / "my project"
-    env_dir = project / ".hyperspace" / "env"
-    subprocess.run([sys.executable, "-m", "venv", "--without-pip", str(env_dir)], check=True, capture_output=True)
-    ok, message = link_bin_to_scripts(env_dir)
-    assert ok, message
-    command, _args = mcp_launch(ROOT, project)
-    proc = subprocess.run([command, "-c", "import sys; print(sys.prefix)"], capture_output=True, encoding="utf-8")
-    assert proc.returncode == 0, proc.stderr
-    assert Path(proc.stdout.strip()).resolve() == env_dir.resolve()
-
-
-def test_mcp_json_command_fails_loudly_without_the_env(tmp_path):
-    """No environment, no process: the spawn itself fails (Claude Code shows
-    "failed to connect"); the SessionStart hook names the missing path and
-    the fix (tests/test_hooks.py::SetupStateTests)."""
-    command, args = mcp_launch(ROOT, tmp_path / "never set up")
-    with pytest.raises(FileNotFoundError):
-        subprocess.run([command, *args], capture_output=True)
+def _scratch_env(tmp_path: Path) -> dict:
+    home = tmp_path / "home"
+    home.mkdir(exist_ok=True)
+    return {**os.environ, "HOME": str(home), "USERPROFILE": str(home)}
 
 
 def test_pyproject_names_and_versions():
     data = _read_pyproject()
     project = data["project"]
     assert project["name"] == "hyperspace-engine"
-    assert project["version"] == "1.0.2"
+    assert project["version"] == "1.0.3"
     assert project["requires-python"] == ">=3.11"
     assert project["license"] == "MIT"
     deps = project["dependencies"]
@@ -116,7 +156,7 @@ def test_version_agrees_across_sources():
 
     plugin = _read_json(".claude-plugin/plugin.json")
     pyproject = _read_pyproject()
-    assert hyperspace.__version__ == "1.0.2"
+    assert hyperspace.__version__ == "1.0.3"
     assert hyperspace.__version__ == plugin["version"]
     assert hyperspace.__version__ == pyproject["project"]["version"]
 
@@ -128,7 +168,7 @@ def test_cli_version_flag(capsys):
     rc = cli.main(["--version"])
     out = capsys.readouterr().out
     assert rc == 0
-    assert "1.0.2" in out
+    assert "1.0.3" in out
 
 
 def test_cli_unknown_subcommand_exits_2(capsys):

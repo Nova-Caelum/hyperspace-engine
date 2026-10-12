@@ -68,6 +68,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _mcp_launch import mcp_launch  # noqa: E402
+from _scratch_home import scratch_home  # noqa: E402
 from _verdict import write_verdict  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -498,6 +499,14 @@ def _sample_no_nova_infra_connections() -> dict:
 # ── orchestrator ─────────────────────────────────────────────────────────
 
 
+def _home(config_dir: Path) -> Path:
+    """The probe's `~` (`probes/_scratch_home.py`): setup records the env it
+    builds there, and every `claude` and server this probe starts reads the
+    record from there. Inside the config dir, so a `--keep` run's
+    `--session-only` follow-up finds the same record."""
+    return config_dir / "home"
+
+
 def run(out_dir, opts) -> bool:
     dest = Path(out_dir) / f"{PROBE}.json"
     evidence: dict = {}
@@ -512,9 +521,9 @@ def run(out_dir, opts) -> bool:
         marker = _read_marker(project_dir)
         config_dir = Path(marker["config_dir"])
         evidence["session_only"] = {"project_dir": str(project_dir), "config_dir": str(config_dir)}
-        env = _build_env(config_dir)
-
-        session_ok, session_evidence, external_id = _step_session(project_dir, env, session_runner)
+        with scratch_home(_home(config_dir)):
+            env = _build_env(config_dir)
+            session_ok, session_evidence, external_id = _step_session(project_dir, env, session_runner)
         evidence["session"] = session_evidence
         result = "FAIL"
         if session_ok:
@@ -529,51 +538,52 @@ def run(out_dir, opts) -> bool:
     evidence["temp_dirs"] = {"config_dir": str(config_dir), "project_dir": str(project_dir), "kept": keep}
 
     try:
-        env, env_evidence = _step_env(config_dir)
-        evidence["env"] = env_evidence
+        with scratch_home(_home(config_dir)):
+            env, env_evidence = _step_env(config_dir)
+            evidence["env"] = env_evidence
 
-        install_ok, install_evidence = _step_install(project_dir, env, source)
-        evidence["install"] = install_evidence
-        if not install_ok:
-            write_verdict(dest, probe=PROBE, result="FAIL", evidence=evidence)
-            return False
+            install_ok, install_evidence = _step_install(project_dir, env, source)
+            evidence["install"] = install_evidence
+            if not install_ok:
+                write_verdict(dest, probe=PROBE, result="FAIL", evidence=evidence)
+                return False
 
-        port = _free_port()
-        provision_ok, provision_evidence = _step_provision(project_dir, port)
-        evidence["provision"] = provision_evidence
-        if not provision_ok:
-            write_verdict(dest, probe=PROBE, result="FAIL", evidence=evidence)
-            return False
+            port = _free_port()
+            provision_ok, provision_evidence = _step_provision(project_dir, port)
+            evidence["provision"] = provision_evidence
+            if not provision_ok:
+                write_verdict(dest, probe=PROBE, result="FAIL", evidence=evidence)
+                return False
 
-        mcp_ok, mcp_evidence = _step_mcp_tools(config_dir, project_dir)
-        evidence["mcp_tools"] = mcp_evidence
-        if not mcp_ok:
-            write_verdict(dest, probe=PROBE, result="FAIL", evidence=evidence)
-            return False
+            mcp_ok, mcp_evidence = _step_mcp_tools(config_dir, project_dir)
+            evidence["mcp_tools"] = mcp_evidence
+            if not mcp_ok:
+                write_verdict(dest, probe=PROBE, result="FAIL", evidence=evidence)
+                return False
 
-        evidence["network"] = _sample_no_nova_infra_connections()
+            evidence["network"] = _sample_no_nova_infra_connections()
 
-        if stop_before == "session":
-            evidence["session"] = {"ran": False, "reason": "rehearsal"}
-            evidence["readback"] = {"skipped": "no item filed — session step was rehearsed, not run"}
-            if keep:
-                _write_marker(project_dir, config_dir)
-                evidence["temp_dirs"]["marker_written"] = True
-            write_verdict(dest, probe=PROBE, result="FAIL", evidence=evidence)
-            return False  # a rehearsal never PASSes — INC022
+            if stop_before == "session":
+                evidence["session"] = {"ran": False, "reason": "rehearsal"}
+                evidence["readback"] = {"skipped": "no item filed — session step was rehearsed, not run"}
+                if keep:
+                    _write_marker(project_dir, config_dir)
+                    evidence["temp_dirs"]["marker_written"] = True
+                write_verdict(dest, probe=PROBE, result="FAIL", evidence=evidence)
+                return False  # a rehearsal never PASSes — INC022
 
-        session_ok, session_evidence, external_id = _step_session(project_dir, env, session_runner)
-        evidence["session"] = session_evidence
-        if not session_ok:
-            write_verdict(dest, probe=PROBE, result="FAIL", evidence=evidence)
-            return False
+            session_ok, session_evidence, external_id = _step_session(project_dir, env, session_runner)
+            evidence["session"] = session_evidence
+            if not session_ok:
+                write_verdict(dest, probe=PROBE, result="FAIL", evidence=evidence)
+                return False
 
-        readback_ok, readback_evidence = _step_readback(project_dir, external_id)
-        evidence["readback"] = readback_evidence
+            readback_ok, readback_evidence = _step_readback(project_dir, external_id)
+            evidence["readback"] = readback_evidence
 
-        ok = install_ok and provision_ok and mcp_ok and session_ok and readback_ok
-        write_verdict(dest, probe=PROBE, result="PASS" if ok else "FAIL", evidence=evidence)
-        return ok
+            ok = install_ok and provision_ok and mcp_ok and session_ok and readback_ok
+            write_verdict(dest, probe=PROBE, result="PASS" if ok else "FAIL", evidence=evidence)
+            return ok
     finally:
         if not keep:
             shutil.rmtree(config_dir, ignore_errors=True)

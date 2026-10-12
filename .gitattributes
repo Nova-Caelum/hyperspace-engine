@@ -4,3 +4,7 @@
 
 # Binary files this repository carries.
 *.png binary
+
+# Windows batch files need CRLF: cmd.exe misreads labels and `goto` in a
+# batch file with Unix line endings.
+*.cmd text eol=crlf

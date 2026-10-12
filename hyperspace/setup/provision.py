@@ -27,12 +27,14 @@ INSIDE the provisioned environment, so the lazy import costs nothing there).
 """
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
+from .. import __version__, provenance
 from .._pyfloor import MIN_PYTHON
 from ..config import write_config
 from ..venv_paths import WINDOWS, link_bin_to_scripts, native_python, portable_python
@@ -84,6 +86,83 @@ def _rc(proc: Any) -> int:
     return getattr(proc, "returncode", 1)
 
 
+_RECORD_STEP = "record the environment in ~/.hyperspace/envs.json"
+_GITIGNORE_LINE = ".hyperspace/env/"
+# IO_REPARSE_TAG_MOUNT_POINT: what `os.lstat` reports for an NTFS directory
+# junction (the `stat` module defines the name on Windows only).
+_JUNCTION_TAG = 0xA0000003
+
+
+def _is_link(path: Path) -> bool:
+    """A symlink, or on Windows a directory junction."""
+    return os.path.islink(path) or getattr(os.lstat(path), "st_reparse_tag", 0) == _JUNCTION_TAG
+
+
+def _make_room(project_dir: Path, env_dir: Path) -> dict | None:
+    """Removes an environment already at `env_dir`, so a rebuild replaces it
+    instead of merging into it (stdlib `venv` writes into an existing folder;
+    current `uv venv` refuses one without `--clear`). It is removed here, not
+    with either tool's `--clear`, because both clear THROUGH a link: a
+    downloaded folder can ship `.hyperspace/env` as a link to any folder on
+    this computer, and rebuilding is exactly what the launcher tells its user
+    to do. So a link is removed itself, never followed, and nothing at all is
+    touched when `.hyperspace` leads outside the project. Returns the step it
+    took, or None when there was nothing to do."""
+    hyperspace_dir = env_dir.parent
+    inside = os.path.normcase(os.path.join(os.path.realpath(project_dir), ".hyperspace"))
+    if os.path.lexists(hyperspace_dir) and os.path.normcase(os.path.realpath(hyperspace_dir)) != inside:
+        return {
+            "command": f"check that {hyperspace_dir} is inside the project",
+            "exit_code": 1,
+            "message": f"{hyperspace_dir} leads outside the project; remove it and run setup again",
+        }
+    if not os.path.lexists(env_dir):
+        return None
+    command = f"remove the old {env_dir} (a rebuild replaces it)"
+    try:
+        if _is_link(env_dir):
+            os.unlink(env_dir)
+        elif env_dir.is_dir():
+            shutil.rmtree(env_dir)
+        else:
+            env_dir.unlink()
+    except OSError as exc:
+        return {"command": command, "exit_code": 1, "message": f"could not remove it: {exc}"}
+    return {"command": command, "exit_code": 0, "message": "removed"}
+
+
+def _record(project_dir: Path, register: Callable[..., Any]) -> dict:
+    """Writes the record `provenance.py` checks before it starts this env,
+    outside the project, so a folder can never bring its own. Never raises:
+    a failed record is a failed step, and the plugin's server will not start
+    an env that has none."""
+    try:
+        register(str(project_dir), by=f"hyperspace-engine {__version__}")
+    except Exception as exc:  # noqa: BLE001 — reported as the step's outcome
+        return {"command": _RECORD_STEP, "exit_code": 1, "message": f"{type(exc).__name__}: {exc}"}
+    return {"command": _RECORD_STEP, "exit_code": 0, "message": f"recorded in {provenance.record_path()}"}
+
+
+def _ignore_env(project_dir: Path) -> dict:
+    """Adds `.hyperspace/env/` to the project's `.gitignore` (created when
+    absent, never added twice), so committing the project does not publish
+    the environment: on another computer that folder is exactly what the
+    launcher must refuse. A `.gitignore` that is a link is left alone."""
+    path = project_dir / ".gitignore"
+    command = f"add {_GITIGNORE_LINE} to {path}"
+    try:
+        if path.is_symlink():
+            return {"command": command, "exit_code": 0, "message": "left alone: .gitignore is a link"}
+        text = path.read_text(encoding="utf-8") if path.exists() else ""
+        if _GITIGNORE_LINE in (line.strip() for line in text.splitlines()):
+            return {"command": command, "exit_code": 0, "message": "already there"}
+        with path.open("a", encoding="utf-8", newline="") as handle:
+            handle.write(("" if not text or text.endswith("\n") else "\n") + _GITIGNORE_LINE + "\n")
+    except (OSError, ValueError) as exc:
+        return {"command": command, "exit_code": 1, "message": str(exc)}
+    return {"command": command, "exit_code": 0, "message": "added"}
+
+
 def provision_env(
     project_dir: str | Path,
     *,
@@ -92,6 +171,7 @@ def provision_env(
     which: Callable[[str], str | None] = shutil.which,
     platform: str | None = None,
     link: Callable[[Path, str], tuple[bool, str]] = link_bin_to_scripts,
+    register: Callable[..., Any] | None = None,
 ) -> dict:
     """Creates `<project_dir>/.hyperspace/env` and installs this plugin's own
     tree into it — `uv venv` + `uv pip install` when `uv` is on PATH (and
@@ -99,14 +179,21 @@ def provision_env(
     which tool ran and every subprocess's exit code so a caller (or a test)
     can tell exactly what happened without re-deriving it from side effects.
 
-    `uv venv` is pinned to `sys.executable` — the interpreter `check_python`
-    just vetted — rather than whatever `uv` would discover first. On Windows
-    (`platform == "win32"`) the install targets `env/Scripts/python.exe`, and
-    a final step links `env/bin` to `env/Scripts` so the one spelling
-    `.mcp.json` and every skill use, `.hyperspace/env/bin/python`, resolves
-    there too (`hyperspace/venv_paths.py`).
+    An environment already there is removed first, so a rebuild (setup's
+    repair) replaces it (`_make_room`). `uv venv` is pinned to
+    `sys.executable` — the interpreter `check_python` just vetted — rather
+    than whatever `uv` would discover first. On Windows (`platform ==
+    "win32"`) the install targets `env/Scripts/python.exe`, and a step links
+    `env/bin` to `env/Scripts` so the spelling every skill uses,
+    `.hyperspace/env/bin/python`, resolves there too
+    (`hyperspace/venv_paths.py`). Once the env is built, `register` (default
+    `provenance.register`) records it in `~/.hyperspace/envs.json`: the
+    plugin's MCP server starts only an env with a record (`bin/hyperspace-env`
+    -> `hyperspace/provenance.py`). Last, `.hyperspace/env/` goes into the
+    project's `.gitignore`.
     """
     platform = sys.platform if platform is None else platform
+    register = provenance.register if register is None else register
     project_dir = Path(project_dir)
     env_dir = project_dir / ".hyperspace" / "env"
     plugin_root = _plugin_root()
@@ -115,6 +202,12 @@ def provision_env(
     use_uv = prefer_uv and which("uv") is not None
     tool = "uv" if use_uv else "venv"
     steps: list[dict] = []
+
+    cleared = _make_room(project_dir, env_dir)
+    if cleared is not None:
+        steps.append(cleared)
+        if cleared["exit_code"] != 0:
+            return {"tool": tool, "ok": False, "steps": steps, "env_dir": str(env_dir)}
 
     if use_uv:
         create_proc = run(
@@ -147,7 +240,11 @@ def provision_env(
         linked, message = link(env_dir, platform)
         steps.append({"command": "link env/bin -> env/Scripts", "exit_code": 0 if linked else 1, "message": message})
 
-    ok = bool(steps) and all(step["exit_code"] == 0 for step in steps)
+    if all(step["exit_code"] == 0 for step in steps):
+        steps.append(_record(project_dir, register))
+    steps.append(_ignore_env(project_dir))
+
+    ok = all(step["exit_code"] == 0 for step in steps)
     return {"tool": tool, "ok": ok, "steps": steps, "env_dir": str(env_dir)}
 
 
@@ -346,6 +443,10 @@ def provision_and_report(
 
     env_info = result["env"]
     print(f"provisioned .hyperspace/env with {env_info['tool']} ({'OK' if env_info['ok'] else 'FAILED'})")
+    for step in env_info["steps"]:
+        if step["exit_code"] != 0:
+            why = step.get("message") or f"exit code {step['exit_code']}"
+            print(f"FAIL {step['command']}: {why}", file=sys.stderr)
     judge_info = result["judge"]
     print(f"judge = {judge_info['judge']}")
     if judge_info["message"]:
@@ -378,8 +479,7 @@ def _door_responds(port: int, host: str = "127.0.0.1") -> bool:
 
 def _check_env(env_dir: Path, platform: str) -> tuple[bool, str]:
     """The venv's own interpreter exists — and, on Windows, `env/bin` reaches
-    it, because `.mcp.json` and every skill run `.hyperspace/env/bin/python`
-    (a missing junction leaves the MCP server unable to start)."""
+    it, because every skill runs `.hyperspace/env/bin/python`."""
     native = native_python(env_dir, platform)
     if not native.is_file():
         return False, f"missing {native}"
@@ -394,9 +494,23 @@ def _check_env(env_dir: Path, platform: str) -> tuple[bool, str]:
     return True, f"found {native} (reachable as {portable})"
 
 
+def _check_record(project_dir: Path) -> tuple[bool, str]:
+    """Whether the plugin's server will start this env: the same
+    `provenance.verify` that `bin/hyperspace-env` runs, against the record
+    setup wrote in `~/.hyperspace/envs.json`."""
+    status, _python, reason = provenance.verify(str(project_dir))
+    if status == provenance.OK:
+        return True, f"setup recorded this environment on this computer ({provenance.record_path()})"
+    return False, (
+        f"{reason}, so the hyperspace server will not start it — "
+        "run the hyperspace-setup skill to rebuild it"
+    )
+
+
 def doctor(project_dir: str | Path, platform: str | None = None) -> tuple[bool, list[str]]:
-    """Re-runs the setup skill's check phase: python, env, store, config/judge,
-    door port free-or-ours. Returns `(all_ok, lines)` — one `OK`/`FAIL` line
+    """Re-runs the setup skill's check phase: python, env, record (the
+    plugin's server starts only a recorded env), store, config/judge, door
+    port free-or-ours. Returns `(all_ok, lines)` — one `OK`/`FAIL` line
     per check, in that order; the CLI prints the lines and exits 0 only when
     every one reads `OK`. `platform` (a `sys.platform` string) selects which
     venv layout to expect; it defaults to the running one."""
@@ -416,6 +530,10 @@ def doctor(project_dir: str | Path, platform: str | None = None) -> tuple[bool, 
     env_ok, env_message = _check_env(hyperspace_dir / "env", platform)
     lines.append(f"{'OK' if env_ok else 'FAIL'} env: {env_message}")
     checks.append(env_ok)
+
+    record_ok, record_message = _check_record(project_dir)
+    lines.append(f"{'OK' if record_ok else 'FAIL'} record: {record_message}")
+    checks.append(record_ok)
 
     db_path = hyperspace_dir / "graph.db"
     store_ok = db_path.is_file()
