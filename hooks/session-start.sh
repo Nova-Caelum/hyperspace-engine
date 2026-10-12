@@ -110,7 +110,7 @@ main() {
     if [ ! -d "$PROJECT_DIR/.hyperspace" ]; then
         printf 'No .hyperspace/ found in this project yet — run the `hyperspace-setup` skill to turn Hyperspace Engine on.\n\n'
     elif [ ! -f "$ENV_PYTHON" ] && [ ! -f "$ENV_PYTHON.exe" ]; then
-        printf '⚠️ The hyperspace MCP server cannot start: %s is missing (the plugin runs .hyperspace/env/bin/python). Run the `hyperspace-setup` skill, then restart the session.\n\n' \
+        printf '⚠️ The hyperspace MCP server cannot start: %s is missing (the server runs from .hyperspace/env, which setup builds and records on this computer). Run the `hyperspace-setup` skill, then restart the session.\n\n' \
             "$ENV_PYTHON"
     fi
 

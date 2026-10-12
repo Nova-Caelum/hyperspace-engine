@@ -67,7 +67,12 @@ This single call:
 - (c) on Windows, links `.hyperspace/env/bin` to the environment's
   `Scripts` folder, so `.hyperspace/env/bin/...` works on every OS;
 - (d) initialises `.hyperspace/graph.db`;
-- (e) writes `.hyperspace/config.toml` and the launcher (step 5 below).
+- (e) writes `.hyperspace/config.toml` and the launcher (step 5 below);
+- (f) records the environment in `~/.hyperspace/envs.json` and adds
+  `.hyperspace/env/` to the project's `.gitignore`. The plugin's MCP server
+  starts only an environment setup recorded on this computer, so running
+  this step again is also the repair: it rebuilds the environment and
+  records it.
 
 From here on every command runs from the environment, always spelled
 `.hyperspace/env/bin/<name>` — on Windows that resolves to `<name>.exe`.
@@ -122,16 +127,16 @@ the console without needing this chat.
 
 ## 6. Tell the user to restart the session
 
-The `hyperspace` MCP server (`.mcp.json`'s `hyperspace` entry) runs
-`.hyperspace/env/bin/python -m hyperspace.mcp` — an interpreter that did not
-exist when this Claude Code session started. Tell the user to restart the
+The `hyperspace` MCP server (`.mcp.json`'s `hyperspace` entry) runs from
+the environment this skill just built and recorded — one that did not exist
+when this Claude Code session started. Tell the user to restart the
 session (or run `/reload-plugins` / `claude mcp list` to check) so the MCP
 connects against the environment this skill just created.
 
 ## If the MCP shows "failed to connect"
 
 Run `.hyperspace/env/bin/hyperspace doctor` — it re-runs this skill's check
-phase (python, env, store, config/judge, door port free-or-ours) and prints
+phase (python, env, record, store, config/judge, door port free-or-ours) and prints
 one `OK`/`FAIL` line per check. Whatever it names as `FAIL` is exactly what
 step to re-run from this skill. If `.hyperspace/env` does not exist at all,
 doctor cannot run either: start again from step 1.

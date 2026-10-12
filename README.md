@@ -58,7 +58,20 @@ the agent.
 
 If anything looks wrong, run `.hyperspace/env/bin/hyperspace doctor` from the project folder (the
 same command on every OS, PowerShell included): one `OK` / `FAIL` line per check (Python,
-environment, store, judge, console port).
+environment, its record, store, judge, console port).
+
+### Security
+
+The plugin's server runs from the project's own environment, `.hyperspace/env`, and a downloaded or
+cloned folder could ship a file there. So the server starts only through a small launcher
+(`bin/hyperspace-env`), which uses your computer's own Python to compare the environment with a
+record setup wrote outside the project, in `~/.hyperspace/envs.json`: the same folder, the same
+`pyvenv.cfg`, the same interpreter. If they do not match, nothing in the folder runs. Setup also
+adds `.hyperspace/env/` to the project's `.gitignore`.
+
+**After updating to 1.0.3, rebuild an existing project's environment once:** an environment built by
+an earlier version has no record, so the server will not start it. Run the `hyperspace-setup` skill
+(Technical Cofounder users: `/technical-cofounder-setup:start`, then choose repair).
 
 ---
 
