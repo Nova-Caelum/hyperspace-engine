@@ -7,15 +7,29 @@
 # can ship a file there. So this script never starts anything in the project
 # itself: it finds this computer's own Python and hands over to
 # hyperspace/provenance.py, which starts the project's environment only when
-# setup built it and recorded it on this computer. Every Python it tries is
-# run once, quietly, before it is trusted, so a placeholder that only prints
-# an install prompt is passed over. `-I` keeps that Python from reading the
-# project's folder or environment variables on its way in.
+# setup built it and recorded it on this computer. A Python that lives inside
+# the project is passed over even when PATH leads to it, and every other one
+# is run once, quietly, before it is trusted, so a placeholder that only
+# prints an install prompt is passed over too. `-I` keeps that Python from
+# reading the project's folder or environment variables on its way in.
 
 HERE=$(dirname -- "$0")
+PROJECT=${CLAUDE_PROJECT_DIR:-$PWD}
 
-for PY in python3 python python3.13 python3.12 python3.11 \
+# True when a Python found this way lives in the project folder: a folder
+# that came from somewhere else can ship one, and PATH can lead to it.
+in_project() {
+    case $1 in /*) ;; *) return 0 ;; esac   # a relative path is relative to the project
+    folder=$(cd -P "${1%/*}" 2>/dev/null && pwd) || return 0
+    real=$(cd -P "$PROJECT" 2>/dev/null && pwd) || real=$PROJECT
+    case $folder/ in "$PROJECT"/* | "$real"/*) return 0 ;; esac
+    return 1
+}
+
+for NAME in python3 python python3.13 python3.12 python3.11 \
     "$HOME/.local/bin/python3.13" "$HOME/.local/bin/python3.12" "$HOME/.local/bin/python3.11"; do
+    PY=$(command -v "$NAME" 2>/dev/null) || continue
+    in_project "$PY" && continue
     if "$PY" -I -S -c '' </dev/null >/dev/null 2>&1; then
         exec "$PY" -I "$HERE/../hyperspace/provenance.py" run -- "$@"
     fi

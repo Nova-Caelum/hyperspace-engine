@@ -21,8 +21,8 @@ isolated Python environment, one SQLite file, one config file, and the run folde
  │        │ call engine scripts                     │ call MCP tools              │
  │        ▼                                         ▼                             │
  │  bin/loop_state.py, node_gates.py …       MCP server `hyperspace` (stdio)      │
- │  (run state, gates)                       bin/hyperspace-env -m hyperspace.mcp │
- │                                           → .hyperspace/env (if recorded)      │
+ │  (run state, gates)                       bin/hyperspace-env -P -m             │
+ │                                             hyperspace.mcp (if recorded)       │
  └────────┬─────────────────────────────────────────┬─────────────────────────────┘
           │ writes                                  │ reads / writes
           ▼                                         ▼
@@ -55,7 +55,7 @@ store is ever edited by hand.
 |---|---|
 | `.claude-plugin/plugin.json` | Plugin identity: name `hyperspace-engine`, version, licence, homepage. The version is what a dependent plugin's semver range resolves against. |
 | `.claude-plugin/marketplace.json` | Makes the repository its own marketplace. The single entry has `source: "./"` — the repository root is the plugin. |
-| `.mcp.json` | Registers one MCP server, `hyperspace`: `${CLAUDE_PLUGIN_ROOT}/bin/hyperspace-env -m hyperspace.mcp` (Windows runs the `bin/hyperspace-env.cmd` beside it). That launcher uses the computer's own Python to run `hyperspace/provenance.py`, which starts the project's `.hyperspace/env` interpreter only when it matches the record setup wrote in `~/.hyperspace/envs.json`; a folder that brought its own environment is refused (see [`reference/tripwires.md`](reference/tripwires.md), "the server launch"). |
+| `.mcp.json` | Registers one MCP server, `hyperspace`: `${CLAUDE_PLUGIN_ROOT}/bin/hyperspace-env -P -m hyperspace.mcp` (Windows runs the `bin/hyperspace-env.cmd` beside it; `-P` keeps the project folder off `sys.path`). That launcher uses the computer's own Python, never one inside the project, to run `hyperspace/provenance.py`, which starts the project's `.hyperspace/env` interpreter only when it matches the record setup wrote in `~/.hyperspace/envs.json`; a folder that brought its own environment is refused (see [`reference/tripwires.md`](reference/tripwires.md), "the server launch"). |
 | `hooks/hooks.json` | Registers one hook, `SessionStart`, with no `matcher` — it fires on every session-start source (`startup`, `resume`, `clear`, `compact`, `fork`), running `hooks/session-start.sh` (which hands its Python-shaped work to `hooks/session_start.py`). |
 | `pyproject.toml` | The `hyperspace` Python package, its runtime dependencies, and the `hyperspace` console script. Requires Python 3.11 or newer. |
 

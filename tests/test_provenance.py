@@ -245,11 +245,25 @@ def test_server_command_starts_a_recorded_env(tmp_path):
     assert Path(proc.stdout.strip()).resolve() == env.resolve()
 
 
-def test_setup_records_the_env_outside_the_project_and_the_server_answers_initialize(tmp_path, home):
+def _initialize(project: Path):
+    """One MCP `initialize` against the server `.mcp.json` starts, with the
+    project as cwd, as Claude Code starts it."""
     from mcp import StdioServerParameters
     from mcp.client.session import ClientSession
     from mcp.client.stdio import stdio_client
 
+    command, args = mcp_launch(ROOT, project)
+    params = StdioServerParameters(command=command, args=args, env=_server_env(project), cwd=str(project))
+
+    async def initialize():
+        async with stdio_client(params) as (read, write):
+            async with ClientSession(read, write) as session:
+                return await session.initialize()
+
+    return asyncio.run(asyncio.wait_for(initialize(), TIMEOUT))
+
+
+def test_setup_records_the_env_outside_the_project_and_the_server_answers_initialize(tmp_path, home):
     project = tmp_path / "my project"
     project.mkdir()
 
@@ -264,17 +278,63 @@ def test_setup_records_the_env_outside_the_project_and_the_server_answers_initia
     assert entry["env"] == os.path.realpath(_env(project))
     assert entry["by"].startswith("hyperspace-engine ")
     assert provenance.verify(str(project))[0] == provenance.OK
+    assert _initialize(project).server_info.name == "hyperspace"
 
-    command, args = mcp_launch(ROOT, project)
-    params = StdioServerParameters(command=command, args=args, env=_server_env(project), cwd=str(project))
 
-    async def initialize():
-        async with stdio_client(params) as (read, write):
-            async with ClientSession(read, write) as session:
-                return await session.initialize()
+def test_server_never_imports_a_hyperspace_package_the_project_ships(tmp_path):
+    """`-m hyperspace.mcp` with the project as cwd would put the project first
+    on `sys.path`, so a folder's own `hyperspace/__init__.py` would run inside
+    a recorded env. `.mcp.json` passes `-P`; the installed package answers."""
+    project = tmp_path / "cloned project"
+    project.mkdir()
+    marker = tmp_path / "shadow.txt"
+    (project / "hyperspace").mkdir()
+    (project / "hyperspace" / "__init__.py").write_text(
+        f"open({str(marker)!r}, 'a').write('imported\\n')\n", encoding="utf-8",
+    )
+    assert _provision(project)["ok"] is True
 
-    initialized = asyncio.run(asyncio.wait_for(initialize(), TIMEOUT))
+    try:
+        initialized, error = _initialize(project), None
+    except Exception as exc:  # noqa: BLE001 — the marker is asserted first
+        initialized, error = None, exc
+
+    assert _marker_lines(marker) == 0, "the project's own hyperspace package was imported by the server"
+    assert error is None, repr(error)
     assert initialized.server_info.name == "hyperspace"
+
+
+def _plant_python_on_path(folder: Path, marker: Path) -> None:
+    """A `python3` and a `python` that write the marker when started."""
+    folder.mkdir(parents=True, exist_ok=True)
+    for name in ("python3", "python"):
+        path = folder / name
+        path.write_text(f'#!/bin/sh\necho "$0 $*" >> "{marker}"\nexit 0\n', encoding="utf-8")
+        path.chmod(0o755)
+
+
+@pytest.mark.skipif(WINDOWS, reason="the .cmd's own check runs on the Windows CI job through the server tests")
+@pytest.mark.parametrize("path_entry", ["absolute", "relative"])
+def test_launcher_skips_a_python_inside_the_project_even_first_on_path(tmp_path, home, path_entry):
+    """PATH can lead into the project (an activated env, a relative entry); the
+    launcher passes over any Python that lives there and uses the computer's
+    own — here the one in `~/.local/bin`, which it always tries."""
+    project = tmp_path / "downloaded project"
+    marker = tmp_path / "started.txt"
+    _plant_python_on_path(project / "tools", marker)
+    (home / ".local" / "bin").mkdir(parents=True)
+    (home / ".local" / "bin" / "python3.11").symlink_to(sys.executable)
+    entry = str(project / "tools") if path_entry == "absolute" else "tools"
+    command, args = mcp_launch(ROOT, project)
+
+    proc = subprocess.run(
+        [command, *args], cwd=str(project), stdin=subprocess.DEVNULL,
+        env={**_server_env(project), "PATH": entry + os.pathsep + os.environ.get("PATH", "")},
+        capture_output=True, encoding="utf-8", errors="replace", timeout=TIMEOUT,
+    )
+
+    assert _marker_lines(marker) == 0, "a Python inside the project was started:\n" + marker.read_text(encoding="utf-8")
+    assert proc.returncode == provenance.MISSING, (proc.returncode, proc.stdout, proc.stderr)
 
 
 def test_setup_ignores_the_env_in_the_projects_gitignore(tmp_path):

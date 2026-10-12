@@ -60,7 +60,7 @@ def test_mcp_json_shape():
     assert set(data["mcpServers"].keys()) == {"hyperspace"}
     entry = data["mcpServers"]["hyperspace"]
     assert entry["command"] == "${CLAUDE_PLUGIN_ROOT}/bin/hyperspace-env"
-    assert entry["args"] == ["-m", "hyperspace.mcp"]
+    assert entry["args"] == ["-P", "-m", "hyperspace.mcp"]
     assert "env" not in entry
 
 
@@ -80,7 +80,9 @@ def test_mcp_entry_files_exist_with_their_line_endings():
 
 def test_mcp_entry_files_hand_over_to_provenance_and_name_nothing_in_the_project():
     """Both entry files only find the computer's own Python and run
-    `provenance.py run`; no line of code (comments aside) names the project."""
+    `provenance.py run`; no line of code (comments aside) names anything in
+    the project's `.hyperspace`. (They read CLAUDE_PROJECT_DIR only to pass
+    over a Python inside it — tests/test_provenance.py.)"""
     for name, comment in (("hyperspace-env", "#"), ("hyperspace-env.cmd", "rem")):
         code = [
             line for line in (ROOT / "bin" / name).read_text(encoding="utf-8").splitlines()
@@ -88,7 +90,7 @@ def test_mcp_entry_files_hand_over_to_provenance_and_name_nothing_in_the_project
         ]
         joined = "\n".join(code)
         assert "provenance.py\" run -- " in joined, name
-        assert ".hyperspace" not in joined and "CLAUDE_PROJECT_DIR" not in joined, name
+        assert ".hyperspace" not in joined, name
 
 
 def test_posix_entry_file_is_executable_in_git():
@@ -105,7 +107,7 @@ def test_mcp_json_command_is_the_plugins_launcher(tmp_path):
     command, args = mcp_launch(ROOT, tmp_path / "my project")
     expected = (ROOT / "bin" / "hyperspace-env").as_posix() + (".cmd" if sys.platform == "win32" else "")
     assert command == expected
-    assert args == ["-m", "hyperspace.mcp"]
+    assert args == ["-P", "-m", "hyperspace.mcp"]
 
 
 def test_mcp_json_command_without_an_env_exits_missing_with_one_line(tmp_path):

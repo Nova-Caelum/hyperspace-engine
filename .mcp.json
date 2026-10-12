@@ -1,1 +1,1 @@
-{"mcpServers": {"hyperspace": {"command": "${CLAUDE_PLUGIN_ROOT}/bin/hyperspace-env", "args": ["-m", "hyperspace.mcp"]}}}
+{"mcpServers": {"hyperspace": {"command": "${CLAUDE_PLUGIN_ROOT}/bin/hyperspace-env", "args": ["-P", "-m", "hyperspace.mcp"]}}}

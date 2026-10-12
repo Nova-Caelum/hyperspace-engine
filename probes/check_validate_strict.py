@@ -6,7 +6,7 @@ Four sub-checks, all must PASS:
   (b) a fresh `uv`-created env, package installed non-editable from
       pyproject.toml, `import hyperspace` succeeds and reports the version
   (c) `.mcp.json`'s server command is the plugin's own launcher
-      (`${CLAUDE_PLUGIN_ROOT}/bin/hyperspace-env -m hyperspace.mcp`, the
+      (`${CLAUDE_PLUGIN_ROOT}/bin/hyperspace-env -P -m hyperspace.mcp`, the
       `.cmd` beside it on Windows), and spawning it with no env fails loudly:
       exit 4 and one line naming setup, never a silent hang
   (d) both plugin manifests and `.mcp.json` parse as JSON
@@ -166,7 +166,7 @@ def check_mcp_command(evidence: dict) -> bool:
         "expected_command": expected,
         "missing_env_spawn": missing_env,
     }
-    return command == expected and args == ["-m", "hyperspace.mcp"] and refused
+    return command == expected and args == ["-P", "-m", "hyperspace.mcp"] and refused
 
 
 def check_manifests_parse(evidence: dict) -> bool:
