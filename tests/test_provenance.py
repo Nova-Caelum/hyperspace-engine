@@ -98,7 +98,8 @@ def _assert_the_fake_is_live(env: Path, marker: Path) -> None:
     marker. Without this, "written zero times" could mean a fake that never
     worked."""
     subprocess.run([provenance.interpreter(str(env)), "-c", "pass"], capture_output=True, timeout=TIMEOUT)
-    assert _marker_lines(marker) == 1, "the planted interpreter did not write its marker when started directly"
+    # >= 1: on Windows the venv's python.exe is a launcher, and the .pth line can run in both processes.
+    assert _marker_lines(marker) >= 1, "the planted interpreter did not write its marker when started directly"
     marker.unlink()
 
 

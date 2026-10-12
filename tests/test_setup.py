@@ -581,7 +581,7 @@ def test_cli_init_provision_non_interactive(tmp_path, monkeypatch, capsys):
     registered: list = []
     monkeypatch.setattr(
         _provision_module, "provision",
-        functools.partial(provision, run=_fake_run_ok(calls), which=_fake_which({"uv"})),
+        functools.partial(provision, run=_fake_run_ok(calls), which=_fake_which({"uv"}), platform="linux"),
     )
     monkeypatch.setattr(provenance, "register", _fake_register(registered))
 
