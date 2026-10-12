@@ -53,6 +53,7 @@ import json
 import os
 import sys
 import tempfile
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -198,6 +199,23 @@ def _describe_existing_run(path: Path) -> str:
     )
 
 
+def _replace_state_file(source, destination):
+    """Preserve atomic replacement while tolerating brief Windows share locks."""
+    deadline = time.monotonic() + 5.0
+    while True:
+        try:
+            os.replace(source, destination)
+            return
+        except PermissionError as exc:
+            # Windows readers/antivirus can briefly deny delete sharing even
+            # while our writer sidecar is held. Never hide permanent failures.
+            if os.name != "nt" or getattr(exc, "winerror", None) not in (5, 32):
+                raise
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(0.05)
+
+
 @dataclass
 class LoopState:
     """Thin dict wrapper over one `loop.state.json`. Every mutating verb ends
@@ -296,7 +314,7 @@ class LoopState:
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
                 json.dump(self.data, handle, indent=2, sort_keys=True)
                 handle.write("\n")
-            os.replace(tmp_name, self.path)
+            _replace_state_file(tmp_name, self.path)
         except BaseException:
             if os.path.exists(tmp_name):
                 os.remove(tmp_name)

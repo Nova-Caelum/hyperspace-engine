@@ -4,6 +4,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -109,6 +110,33 @@ class StaminaTests(unittest.TestCase):
         loop_state.link_project(self.state, 'project-a', ['module-b'])
         loop_state.gate_pass(self.state, 'specifying', [], 'tester')
         self.assertEqual({'project':'project-a','modules':['module-b']}, loop_state.LoopState.load(self.state.path).data['project_link'])
+
+    def test_windows_transient_share_lock_retries_atomic_replace(self):
+        error = PermissionError('sharing denied')
+        error.winerror = 32
+        with mock.patch.object(loop_state.os, 'name', 'nt'), \
+             mock.patch.object(loop_state.os, 'replace', side_effect=[error, None]) as replace, \
+             mock.patch.object(loop_state.time, 'sleep') as sleep:
+            loop_state._replace_state_file('source', 'destination')
+        self.assertEqual(2, replace.call_count)
+        sleep.assert_called_once_with(0.05)
+
+    def test_windows_persistent_share_lock_fails_at_deadline(self):
+        error = PermissionError('access denied')
+        error.winerror = 5
+        with mock.patch.object(loop_state.os, 'name', 'nt'), \
+             mock.patch.object(loop_state.os, 'replace', side_effect=error) as replace, \
+             mock.patch.object(loop_state.time, 'monotonic', side_effect=[0, 5]):
+            with self.assertRaises(PermissionError):
+                loop_state._replace_state_file('source', 'destination')
+        replace.assert_called_once()
+
+    def test_non_windows_permission_error_is_not_retried(self):
+        with mock.patch.object(loop_state.os, 'name', 'posix'), \
+             mock.patch.object(loop_state.os, 'replace', side_effect=PermissionError) as replace:
+            with self.assertRaises(PermissionError):
+                loop_state._replace_state_file('source', 'destination')
+        replace.assert_called_once()
 
     def test_concurrent_cli_attachments_preserve_every_session(self):
         processes = [subprocess.Popen(
