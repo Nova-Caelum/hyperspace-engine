@@ -20,7 +20,8 @@ local marketplace into a fresh `CLAUDE_CONFIG_DIR`, then
      installed plugin's `bin/hyperspace-env`, or `.cmd` on Windows, which
      starts the env only because setup recorded it), and
      `claude --init-only` runs the hook successfully: primer delivered, and
-     the run's `fresh_sessions` counter bumped to 1 by the hook's Python half.
+     an unattached session leaves stamina at zero; explicitly attaching a new
+     session starts one block, and its startup does not double-count it.
 
 No model call, no `claude -p`, no credentials: `mcp list`, `plugin install`
 and `--init-only` all run unauthenticated (WINDOWS_FACTS F13, F14). The
@@ -40,6 +41,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import uuid
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -84,8 +86,11 @@ def _connected(line: str) -> bool:
     return bool(re.search(r"(✔|√)\s*Connected", line)) and "Failed" not in line
 
 
-def _init_only(claude: str, project: Path, env: dict, log: Path) -> dict:
-    result = _claude(claude, ["--debug-file", str(log), "--init-only"], cwd=project, env=env)
+def _init_only(claude: str, project: Path, env: dict, log: Path, session_id: str | None = None) -> dict:
+    args = ["--debug-file", str(log), "--init-only"]
+    if session_id:
+        args += ["--session-id", session_id]
+    result = _claude(claude, args, cwd=project, env=env)
     text = log.read_text(encoding="utf-8", errors="replace") if log.is_file() else ""
     hook_lines = [line for line in text.splitlines() if "SessionStart" in line and "Hook" in line]
     result.update({
@@ -159,19 +164,37 @@ def run(out_dir, opts) -> bool:
         after = _claude(claude, ["mcp", "list"], cwd=project, env=env)
         after["server_line"] = _server_line(after.get("stdout", ""))
         evidence["mcp_list_after_setup"] = after
-        evidence["hook_after_setup"] = _init_only(claude, project, env, tmp_path / "after.log")
+        evidence["hook_unattached"] = _init_only(claude, project, env, tmp_path / "unattached.log")
         state_path = project / "hyperspace" / "runs" / "runtime-goal" / "loop.state.json"
         try:
-            used = json.loads(state_path.read_text(encoding="utf-8"))["budget"]["fresh_sessions"]["used"]
+            unattached_used = json.loads(state_path.read_text(encoding="utf-8"))["budget"]["stamina_blocks"]["used"]
         except (OSError, ValueError, KeyError):
-            used = None
-        evidence["fresh_sessions_used"] = used
+            unattached_used = None
+        evidence["unattached_stamina_blocks_used"] = unattached_used
+        session_id = str(uuid.uuid4())
+        attach = subprocess.run(
+            [str(env_python), str(ROOT / "bin" / "loop_state.py"), "attach-session",
+             str(state_path), "--session-id", session_id],
+            cwd=str(project), capture_output=True, encoding="utf-8", errors="replace", timeout=120,
+        )
+        evidence["attach_session"] = {"exit_code": attach.returncode, "stderr": _trim(attach.stderr)}
+        evidence["hook_after_setup"] = _init_only(claude, project, env, tmp_path / "after.log", session_id)
+        try:
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            used = state["budget"]["stamina_blocks"]["used"]
+            attached = session_id in state["attached_sessions"]
+        except (OSError, ValueError, KeyError):
+            used, attached = None, False
+        evidence["stamina_blocks_used"] = used
+        evidence["session_attached"] = attached
         after_ok = (
             _connected(after["server_line"])
             and evidence["hook_after_setup"]["hook_success"]
             and evidence["hook_after_setup"]["primer_delivered"]
             and not evidence["hook_after_setup"]["mcp_cannot_start_line"]
-            and used == 1
+            and evidence["hook_unattached"]["hook_success"]
+            and unattached_used == 0
+            and attach.returncode == 0 and attached and used == 1
         )
 
     checks = {
