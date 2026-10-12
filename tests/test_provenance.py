@@ -127,11 +127,11 @@ def _recordable_env(project: Path) -> Path:
 
 
 def _swap_in_a_copy(env: Path) -> None:
-    """Replace the env folder with a byte-identical copy. The old folder is
-    kept (renamed) until the copy is in place, so the copy cannot reuse its
-    file-system identity on a file system that recycles inode numbers."""
+    """Replace the env folder with one that looks the same but that setup did
+    not leave its token in: a folder swapped in from elsewhere, or the env
+    rebuilt without setup (`uv venv --clear` removes the token too)."""
     copy = env.with_name("env.copy")
-    shutil.copytree(env, copy, symlinks=True)
+    shutil.copytree(env, copy, symlinks=True, ignore=shutil.ignore_patterns(provenance.TOKEN_FILE))
     env.rename(env.with_name("env.old"))
     copy.rename(env)
 
@@ -218,7 +218,7 @@ def test_server_command_refuses_an_env_swapped_in_after_setup_recorded_one(tmp_p
     assert _marker_lines(marker) == 0
     assert proc.returncode == provenance.REFUSED, (proc.returncode, proc.stdout, proc.stderr)
     assert proc.stdout == ""
-    assert "env_id" in proc.stderr
+    assert "token" in proc.stderr
 
 
 def test_server_command_without_an_env_exits_missing_with_one_line(tmp_path):
@@ -443,7 +443,7 @@ def test_an_env_deleted_and_rebuilt_without_registering_is_refused(tmp_path):
     _swap_in_a_copy(env)
     status, python, reason = provenance.verify(str(project))
     assert (status, python) == (provenance.REFUSED, None)
-    assert "env_id" in reason
+    assert "token" in reason
 
 
 def test_an_edited_pyvenv_cfg_is_refused(tmp_path):
