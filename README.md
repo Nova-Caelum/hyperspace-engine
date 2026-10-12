@@ -128,7 +128,7 @@ between judges are in [`docs/05_design_rationale.md`](docs/05_design_rationale.m
 
 ## Platform support
 
-| Platform | v1.0.2 |
+| Platform | v1.0.3 |
 |---|---|
 | macOS | Verified end to end: public-marketplace install through a verifier-closed row read back from the console |
 | Linux | CI: the full test suite, real provisioning, the MCP server, and the real `claude` binary starting it and running the session hook |

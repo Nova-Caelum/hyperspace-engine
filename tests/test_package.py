@@ -46,7 +46,7 @@ def test_marketplace_json_shape():
 def test_plugin_json_shape():
     data = _read_json(".claude-plugin/plugin.json")
     assert data["name"] == "hyperspace-engine"
-    assert data["version"] == "1.0.2"
+    assert data["version"] == "1.0.3"
     assert isinstance(data["description"], str) and data["description"]
     assert data["author"]["name"] == "Nova Caelum"
     assert data["author"]["url"] == "https://novacaelum.com"
@@ -135,7 +135,7 @@ def test_pyproject_names_and_versions():
     data = _read_pyproject()
     project = data["project"]
     assert project["name"] == "hyperspace-engine"
-    assert project["version"] == "1.0.2"
+    assert project["version"] == "1.0.3"
     assert project["requires-python"] == ">=3.11"
     assert project["license"] == "MIT"
     deps = project["dependencies"]
@@ -154,7 +154,7 @@ def test_version_agrees_across_sources():
 
     plugin = _read_json(".claude-plugin/plugin.json")
     pyproject = _read_pyproject()
-    assert hyperspace.__version__ == "1.0.2"
+    assert hyperspace.__version__ == "1.0.3"
     assert hyperspace.__version__ == plugin["version"]
     assert hyperspace.__version__ == pyproject["project"]["version"]
 
@@ -166,7 +166,7 @@ def test_cli_version_flag(capsys):
     rc = cli.main(["--version"])
     out = capsys.readouterr().out
     assert rc == 0
-    assert "1.0.2" in out
+    assert "1.0.3" in out
 
 
 def test_cli_unknown_subcommand_exits_2(capsys):

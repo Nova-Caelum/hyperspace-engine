@@ -134,7 +134,7 @@ def check_fresh_env_import(evidence: dict) -> bool:
             venv_proc.returncode == 0
             and install_proc.returncode == 0
             and import_proc.returncode == 0
-            and import_proc.stdout.strip() == "1.0.2"
+            and import_proc.stdout.strip() == "1.0.3"
         )
 
 
