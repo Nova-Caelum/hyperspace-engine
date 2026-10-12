@@ -57,10 +57,10 @@ def _loop_modules(plugin_root: Path):
         return None, set(_DEFAULT_TERMINAL)
 
 
-def active_runs(project_dir: Path, plugin_root: Path, source: str) -> list[str]:
+def active_runs(project_dir: Path, plugin_root: Path, source: str, session_id: str | None = None) -> list[str]:
     """One status line per non-terminal run under `<project>/hyperspace/runs`,
-    each followed by any budget notify lines — bumping `fresh_sessions` /
-    `compactions` first when `source` is `startup` / `compact`."""
+    each followed by any budget notify lines. Only compaction of an explicitly
+    attached session consumes stamina."""
     loop_state, terminal = _loop_modules(plugin_root)
     lines: list[str] = []
     runs_dir = project_dir / "hyperspace" / "runs"
@@ -83,7 +83,7 @@ def active_runs(project_dir: Path, plugin_root: Path, source: str) -> list[str]:
         notify_lines: list[str] = []
         if state is not None and source in _BUMP_EVENTS:
             try:
-                loop_state.bump(state, event=source)
+                loop_state.bump(state, event=source, session_id=session_id)
                 notify_lines = loop_state.notify(state)
             except Exception:
                 notify_lines = []
@@ -159,10 +159,10 @@ def recent_worklog(project_dir: Path) -> list[str]:
     return lines
 
 
-def render(project_dir: Path, plugin_root: Path, source: str) -> str:
+def render(project_dir: Path, plugin_root: Path, source: str, session_id: str | None = None) -> str:
     """The whole Python half of the hook's output, as one string."""
     out: list[str] = []
-    runs = active_runs(project_dir, plugin_root, source)
+    runs = active_runs(project_dir, plugin_root, source, session_id)
     if runs:
         out += ["## Active loop", *runs, ""]
     worklog = recent_worklog(project_dir)
@@ -177,7 +177,16 @@ def main(argv: list[str]) -> int:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     try:
         project_dir, plugin_root, source = Path(argv[0]), Path(argv[1]), argv[2]
-        sys.stdout.write(render(project_dir, plugin_root, source))
+        try:
+            payload = json.loads(sys.stdin.read())
+            session_id = payload.get("session_id")
+        except (ValueError, AttributeError):
+            session_id = None
+        if isinstance(session_id, str) and _SLUG_RE.fullmatch(session_id):
+            sys.stdout.write(f"session-id={session_id}\n")
+        else:
+            session_id = None
+        sys.stdout.write(render(project_dir, plugin_root, source, session_id))
     except Exception:
         pass
     return 0

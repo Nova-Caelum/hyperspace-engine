@@ -32,8 +32,12 @@ def test_loop_state_stdout_is_utf8_on_an_ansi_pipe(tmp_path):
                        "--workspace", str(tmp_path / "runs"), cwd=tmp_path)
     assert init.returncode == 0, init.stderr
     state = tmp_path / "runs" / "enc-goal" / "loop.state.json"
-    for _ in range(2):
-        assert _loop_state("bump", str(state), "--event", "startup", cwd=tmp_path).returncode == 0
+    import json
+    document = json.loads(state.read_text(encoding="utf-8"))
+    document["budget"]["stamina_blocks"]["cap"] = 1
+    state.write_text(json.dumps(document), encoding="utf-8")
+    for session in ("first", "second"):
+        assert _loop_state("attach-session", str(state), "--session-id", session, cwd=tmp_path).returncode == 0
     notify = _loop_state("notify", str(state), cwd=tmp_path)
     assert notify.returncode == 0, notify.stderr
     assert "soft cap crossed — notify-only" in notify.stdout.decode("utf-8")

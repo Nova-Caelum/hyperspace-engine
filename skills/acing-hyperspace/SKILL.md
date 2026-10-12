@@ -39,16 +39,18 @@ Between two nodes, enter the earlier one: hidden complexity upgrades forward; no
 
 <!-- END ROUTING BLOCK -->
 
+## Run attachment
+
+Attach only the run you work on using `attach-session` and your real preload session ID; follow `gear2-understand` for the command. Resume a paused run before work.
+
 ## Red Flags
 
 These thoughts mean STOP — you are rationalizing:
 
 | Thought | Reality |
 |---|---|
-| "This is still conversation, not a task." | Questions and clarifications are tasks. The check comes before the reply. |
 | "One small dial — a skill is overkill here." | Five loaded skills slept through five dials. "Overkill" is the tell. |
 | "One more attempt first; I'll invoke it if this fails." | The retry is where the skill was needed. Invoke before the attempt. |
-| "I'd have noticed if a trigger applied." | A row in a table is not a firing. The work's shape decides, not your noticing. |
 | "I'll just draft it first." | Gates keyed on your own intent die. The moment is now, before the first action. |
 | "I remember what that skill says." | The one-row summary is what fired last time, not the body. Read the one on disk. |
 | "The table told me what to do; I did it." | The table names doors, never steps. Enter the node; the node has the steps. |

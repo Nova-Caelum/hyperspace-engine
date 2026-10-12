@@ -102,12 +102,40 @@ Move status live -> done. Requires driver.authority == 'human'.
 
 ### `bump`
 
-Increment a detected budget cap for one SessionStart event (startup\|compact; anything else is a no-op).
+Count compaction for an explicitly attached session.
 
 | Argument | Required | Notes |
 |---|---|---|
 | `path` | yes |  |
 | `--event` | yes | SessionStart source, e.g. startup\|compact\|resume\|clear |
+| `--session-id` | no |  |
+
+### `attach-session`
+
+| Argument | Required | Notes |
+|---|---|---|
+| `path` | yes |  |
+| `--session-id` | yes |  |
+
+### `link-project`
+
+| Argument | Required | Notes |
+|---|---|---|
+| `path` | yes |  |
+| `--project` | yes |  |
+| `--module` | no |  |
+
+### `pause`
+
+| Argument | Required | Notes |
+|---|---|---|
+| `path` | yes |  |
+
+### `resume`
+
+| Argument | Required | Notes |
+|---|---|---|
+| `path` | yes |  |
 
 ### `notify`
 

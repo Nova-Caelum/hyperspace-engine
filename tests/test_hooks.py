@@ -308,8 +308,8 @@ class HookHarness(unittest.TestCase):
         config_path.write_text(text, encoding="utf-8")
         return config_path
 
-    def fresh_sessions_used(self, state_path: Path) -> int:
-        return json.loads(state_path.read_text(encoding="utf-8"))["budget"]["fresh_sessions"]["used"]
+    def stamina_used(self, state_path: Path) -> int:
+        return json.loads(state_path.read_text(encoding="utf-8"))["budget"]["stamina_blocks"]["used"]
 
 
 # (a) ----------------------------------------------------------------------
@@ -351,7 +351,7 @@ class PrimerDeliveryTests(HookHarness):
         delivered, _, _ = _extract_delivered_block(result.stdout)
         self.assertEqual(_expected_primer_body(), delivered)
         self.assertIn("goal=space-goal", result.stdout)
-        self.assertEqual(1, self.fresh_sessions_used(state_path))
+        self.assertEqual(0, self.stamina_used(state_path))
 
 
 # (b), (c), (d) --------------------------------------------------------------
@@ -386,30 +386,34 @@ class ActiveRunAndBudgetTests(HookHarness):
         self.assertRan(result)
         self.assertNotIn("goal=finished-goal", result.stdout)
 
-    def test_startup_and_compact_bump_exactly_once_resume_and_clear_do_not(self) -> None:
+    def test_only_attached_session_compaction_counts(self) -> None:
         state_path = self.init_run("budget-goal")
-
-        def used() -> tuple[int, int]:
-            data = json.loads(state_path.read_text(encoding="utf-8"))
-            return data["budget"]["fresh_sessions"]["used"], data["budget"]["compactions"]["used"]
-
-        for source, expected in (("resume", (0, 0)), ("clear", (0, 0)),
-                                 ("startup", (1, 0)), ("compact", (1, 1))):
-            result = self.run_hook(source=source)
+        state = loop_state.LoopState.load(state_path)
+        loop_state.attach_session(state, "t")
+        for source, session, expected in (("startup", "t", 1), ("startup", "t", 1),
+                ("compact", "other", 1), ("resume", "t", 1), ("compact", "t", 2)):
+            result = self.run_hook(source=source, session_id=session)
             self.assertRan(result)
-            self.assertEqual(expected, used(), f"after source={source}")
+            self.assertEqual(expected, self.stamina_used(state_path))
 
     def test_notify_line_appears_once_soft_cap_crossed(self) -> None:
-        self.init_run("cap-goal")
-
-        result = self.run_hook(source="startup")
+        state_path = self.init_run("cap-goal")
+        state = loop_state.LoopState.load(state_path)
+        state.data["budget"]["stamina_blocks"]["cap"] = 1
+        loop_state.attach_session(state, "t")
+        result = self.run_hook(source="compact")
         self.assertRan(result)
-        self.assertNotIn("soft cap crossed", result.stdout)
+        self.assertIn("stamina_blocks: 2>1", result.stdout)
 
-        result = self.run_hook(source="startup")
+    def test_paused_banner_preserves_count(self) -> None:
+        state_path = self.init_run("paused-goal")
+        state = loop_state.LoopState.load(state_path)
+        loop_state.attach_session(state, "t")
+        loop_state.pause(state)
+        result = self.run_hook(source="compact")
         self.assertRan(result)
-        self.assertIn("fresh_sessions: 2>1", result.stdout)
-        self.assertIn("soft cap crossed", result.stdout)
+        self.assertIn("status=paused", result.stdout)
+        self.assertEqual(1, self.stamina_used(state_path))
 
 
 # (e), (f) --------------------------------------------------------------
@@ -530,7 +534,7 @@ class InterpreterResolutionTests(HookHarness):
             "the project's own interpreter was started:\n" + (marker.read_text() if marker.exists() else ""),
         )
         self.assertIn("goal=planted-goal", result.stdout)
-        self.assertEqual(1, self.fresh_sessions_used(state_path))
+        self.assertEqual(0, self.stamina_used(state_path))
         delivered, begin_count, end_count = _extract_delivered_block(result.stdout)
         self.assertEqual((1, 1), (begin_count, end_count))
         self.assertEqual(_expected_primer_body(), delivered)
@@ -557,7 +561,7 @@ class InterpreterResolutionTests(HookHarness):
         result = self.run_hook(source="startup", path_dirs=[])
         self.assertRan(result)
         self.assertNotIn("goal=real-env-goal", result.stdout)
-        self.assertEqual(0, self.fresh_sessions_used(state_path))
+        self.assertEqual(0, self.stamina_used(state_path))
         self.assertIn("No Python 3.11+ found", result.stdout)
         self.assertNotIn("MCP server cannot start", result.stdout)
 
@@ -575,7 +579,7 @@ class InterpreterResolutionTests(HookHarness):
         self.assertRan(result)
         self.assertFalse(marker.exists())
         self.assertNotIn("goal=scripts-goal", result.stdout)
-        self.assertEqual(0, self.fresh_sessions_used(state_path))
+        self.assertEqual(0, self.stamina_used(state_path))
         self.assertIn("MCP server cannot start", result.stdout)
 
     def test_microsoft_store_placeholder_is_skipped_not_trusted(self) -> None:
@@ -587,7 +591,7 @@ class InterpreterResolutionTests(HookHarness):
         result = self.run_hook(source="startup", path_dirs=[stub_dir, self.tmp_path / "later-bin"])
         self.assertRan(result)
         self.assertIn("goal=stub-goal", result.stdout)
-        self.assertEqual(1, self.fresh_sessions_used(state_path))
+        self.assertEqual(0, self.stamina_used(state_path))
         self.assertTrue(marker.is_file())
         self.assertNotIn("Microsoft Store", result.stdout + result.stderr)
 
@@ -603,7 +607,7 @@ class InterpreterResolutionTests(HookHarness):
         result = self.run_hook(source="startup", path_dirs=[self.tmp_path / "launcher-bin"])
         self.assertRan(result)
         self.assertIn("goal=py-goal", result.stdout)
-        self.assertEqual(1, self.fresh_sessions_used(state_path))
+        self.assertEqual(0, self.stamina_used(state_path))
 
     def test_a_versioned_python_on_path_is_used_when_python3_is_too_old(self) -> None:
         """macOS ships a 3.9 `python3`; uv links only `python3.12`. The hook must
@@ -614,7 +618,7 @@ class InterpreterResolutionTests(HookHarness):
         result = self.run_hook(source="startup", path_dirs=[self.tmp_path / "old-bin", self.tmp_path / "new-bin"])
         self.assertRan(result)
         self.assertIn("goal=versioned-goal", result.stdout)
-        self.assertEqual(1, self.fresh_sessions_used(state_path))
+        self.assertEqual(0, self.stamina_used(state_path))
         self.assertNotIn("No Python 3.11+ found", result.stdout)
 
     def test_a_versioned_python_in_home_local_bin_is_used_though_it_is_not_on_path(self) -> None:
@@ -628,7 +632,7 @@ class InterpreterResolutionTests(HookHarness):
         self.assertRan(result)
         self.assertFalse(marker.exists(), "the project's own interpreter was started")
         self.assertIn("goal=home-goal", result.stdout)
-        self.assertEqual(1, self.fresh_sessions_used(state_path))
+        self.assertEqual(0, self.stamina_used(state_path))
 
     def test_a_versioned_python_that_is_too_old_is_skipped_too(self) -> None:
         self.init_run("old-versioned-goal")
@@ -740,7 +744,7 @@ class PythonHalfTests(HookHarness):
         )
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertIn("goal=stdlib-goal", result.stdout)
-        self.assertEqual(1, self.fresh_sessions_used(state_path))
+        self.assertEqual(0, self.stamina_used(state_path))
 
     def test_render_accepts_backslash_and_forward_slash_paths_alike(self) -> None:
         module = _load_session_start()

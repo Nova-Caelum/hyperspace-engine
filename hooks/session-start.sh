@@ -119,7 +119,7 @@ main() {
         return 0
     fi
 
-    "$PY" $PY_ARG "$PLUGIN_ROOT/hooks/session_start.py" "$PROJECT_DIR" "$PLUGIN_ROOT" "$SOURCE"
+    printf '%s' "$INPUT" | "$PY" $PY_ARG "$PLUGIN_ROOT/hooks/session_start.py" "$PROJECT_DIR" "$PLUGIN_ROOT" "$SOURCE"
     return 0
 }
 

@@ -263,6 +263,7 @@ class LoopEndingLiveDoneTests(unittest.TestCase):
 
     def test_non_executing_gate_does_not_confer_live(self) -> None:
         state = self._init_state()
+        loop_state.link_project(state, "test-project", ["test-module"])
         state.set_node("specifying")
 
         loop_state.gate_pass(
@@ -445,12 +446,13 @@ class TerminalStatusMirrorTests(unittest.TestCase):
         """Consumer-level proof of the mirror: the budget counters freeze
         the moment the run ends, which is what `bump`'s docstring already
         promised and what the missing mirror silently broke."""
-        before = self.state.data["budget"]["fresh_sessions"]["used"]
+        loop_state.attach_session(self.state, "terminal-test")
+        before = self.state.data["budget"]["stamina_blocks"]["used"]
 
         loop_state.descope(self.state, decision_ref="workspace/x/Decision_Descope.md")
 
-        self.assertEqual(0, loop_state.bump(self.state, event="startup"))
-        self.assertEqual(before, self.state.data["budget"]["fresh_sessions"]["used"])
+        self.assertEqual(0, loop_state.bump(self.state, event="compact", session_id="terminal-test"))
+        self.assertEqual(before, self.state.data["budget"]["stamina_blocks"]["used"])
 
 
 def _valid_tests_json() -> dict:

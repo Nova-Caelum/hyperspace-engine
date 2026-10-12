@@ -21,6 +21,7 @@ past `executing`.
 | `killed` | yes |  |
 | `abandoned_budget` |  | yes — routes to `killed` |
 | `blocked_external` |  | yes — routes to `killed` |
+| `paused` |  |  |
 
 ## How the ending is derived
 

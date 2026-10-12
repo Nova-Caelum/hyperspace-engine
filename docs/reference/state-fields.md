@@ -18,17 +18,21 @@ Source: `bin/loop_state.schema.json`. Every field below is written only by the e
 | `framework_version` | string | yes | Plays MachineRun.machine_version's role for the loop (renamed per DECISIONS.md D6 — 'machine_version' names the Graph Machine specifically). |
 | `original_input` | string | yes | Mirrors MachineRun.original_input. Immutable — the raw submission, set once at init, never rewritten by later saves. |
 | `input_hash` | string | yes | Mirrors MachineRun.input_hash. sha256 hex digest of original_input, computed once at init. |
-| `status` | string | yes | PRD #9.1's LoopStatus set, verbatim. Deliberately NOT run.py's RunStatus (see Engineer_Notes field-mirroring table for the divergence). Values: `framing`, `understanding`, `deciding`, `specifying`, `executing`, `verifying`, `live`, `done`, `descoped`, `killed`, `abandoned_budget`, `blocked_external`. |
+| `status` | string | yes | Loop lifecycle status; paused retains current_node and paused_from until resume. Values: `framing`, `understanding`, `deciding`, `specifying`, `executing`, `verifying`, `live`, `done`, `descoped`, `killed`, `abandoned_budget`, `blocked_external`, `paused`. |
 | `current_node` | string \| null | yes | Mirrors MachineRun.current_node. The stage/node identifier the run is presently in, or null before any node has been entered. |
 | `trail` | array | yes | History of node transitions, oldest first. The most recent entry has exited_at/outcome null while the run is still in that node. |
 | `artifacts` | array | yes | T3.2 (ncf-m3-artifact-freeze) fills the freeze/hash behavior; this shape is declared now, not implemented. One entry per artifact frozen at a gate pass. |
 | `gates` | array | yes | T3.1 design decision (see Engineer_Notes 'gates[] item shape' section — T3.2 inherits this shape). One entry per node whose exit gate has been evaluated. |
-| `budget` | object | yes | T3.6 (ncf-m3-budget-counters) fills the counting behavior; this shape is declared now. Two counted soft caps plus three round/retry counters. Only measured fields are written (S1, bin/PORT_NOTES.md): a cap nothing observes is not in the file. |
+| `budget` | object | yes | Stamina blocks for attached sessions, plus existing advisory and retry counters. |
 | `driver` | object | yes | T3.6 fills behavior. Who/what was driving at the last approval. |
 | `kill` | object | yes | T3.5 (ncf-m3-kill-predicate) fills the predicate that sets this. Cause is recorded here; cause never gates (PRD #9.1). |
 | `descope_decision_ref` | string \| null | yes | T3.5 (ncf-m3-kill-predicate). Set by the `descope` event verb (bin/loop_state.py); a pointer to where the descope decision is recorded, per PRD #9.3 ('the decision is recorded in loop.state.json, not remembered'). Null until a descope decision exists. Presence (not content) is what terminal_route() in loop_terminal.py consults — cause-blind by the same rule as `kill.reason`. |
 | `final_route` | string \| null | yes | PRD #9.1's LEGITIMATE_TERMINAL set, or null before the run ends. Deliberately NOT run.py's TerminalRoute (see Engineer_Notes field-mirroring table). Values: `done`, `descoped`, `killed`, `null`. |
 | `escape_rate` | number \| null | yes | PRD #6.3: recorded, never thresholded in v1. Written when work moves from finished to confirmed; null until then. |
+| `attached_sessions` | array | no |  |
+| `project_link` | object \| null | no |  |
+| `paused_from` | string | no |  Values: `framing`, `understanding`, `deciding`, `specifying`, `executing`, `verifying`, `live`, `abandoned_budget`, `blocked_external`. |
+| `legacy_budget` | object | no | Unattributed historical global counters; never used to infer stamina. |
 
 ## `trail[]`
 
@@ -60,12 +64,11 @@ Source: `bin/loop_state.schema.json`. Every field below is written only by the e
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `budget.fresh_sessions` | object | yes | T3.6 (ncf-m3-budget-counters). Soft cap: 1, per task (a provisional number, PRD §6.3). Counted: the SessionStart hook observes `source=startup` and calls `bump --event startup`. |
-| `budget.compactions` | object | yes | T3.6 (ncf-m3-budget-counters). Soft cap: 1, per task (a provisional number, PRD §6.3). Counted: the SessionStart hook observes `source=compact` and calls `bump --event compact`. |
 | `budget.rework_rounds` | integer | yes |  |
 | `budget.doubled_back_rounds` | integer | yes | T3.2 (ncf-m3-artifact-freeze). Incremented by check_frozen() (bin/loop_state.py) on every frozen-artifact hash mismatch it discovers — never by an argument telling it a change happened. |
 | `budget.doubled_back_events` | array | yes | T3.2 (ncf-m3-artifact-freeze). One entry per hash mismatch check_frozen() has ever detected, oldest first — the durable answer to 'which artifact, and when'. |
 | `budget.stage_retries` | integer | yes |  |
+| `budget.stamina_blocks` | object | yes | One block for each explicitly attached new session ID, plus one for each compaction in an attached session. Unset cap until chosen by the owner. |
 
 ## `driver`
 
@@ -82,19 +85,12 @@ Source: `bin/loop_state.schema.json`. Every field below is written only by the e
 | `kill.fired` | boolean | yes |  |
 | `kill.reason` | string \| null | yes |  |
 
-## `budget.fresh_sessions`
+## `project_link`
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `budget.fresh_sessions.cap` | number \| null | yes |  |
-| `budget.fresh_sessions.used` | number | yes |  |
-
-## `budget.compactions`
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `budget.compactions.cap` | number \| null | yes |  |
-| `budget.compactions.used` | number | yes |  |
+| `project_link.project` | string | yes |  |
+| `project_link.modules` | array | yes |  |
 
 ## `budget.doubled_back_events[]`
 
@@ -102,3 +98,10 @@ Source: `bin/loop_state.schema.json`. Every field below is written only by the e
 |---|---|---|---|
 | `budget.doubled_back_events[].path` | string | yes |  |
 | `budget.doubled_back_events[].detected_at` | string | yes |  |
+
+## `budget.stamina_blocks`
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `budget.stamina_blocks.cap` | number \| null | yes |  |
+| `budget.stamina_blocks.used` | number | yes |  |

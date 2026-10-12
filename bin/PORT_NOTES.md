@@ -219,3 +219,7 @@ demi's Self-review:
 - **Why:** without this hook, `/clear` or a compaction silently drops the loop — nothing re-primes
   `acing-hyperspace`, so its routing table only fires if the model happens to reach for the skill on
   its own. Test: `tests/test_hooks.py`. Tripwires this creates: `docs/reference/tripwires.md`.
+
+## Attached-session stamina and pause (2026-10-12)
+
+Ported from canonical loop_state.py and loop_terminal.py: explicit attachment, stamina_blocks, legacy counter retention, project/module linkage required at Draft exit, and reversible pause. The port continues to omit unobserved hour/worklog caps and their detection flags. Both hooks pass the actual session ID; discovering a run never attaches it.
