@@ -5,9 +5,10 @@ Four sub-checks, all must PASS:
   (a) `claude plugin validate --strict .` from the repo root
   (b) a fresh `uv`-created env, package installed non-editable from
       pyproject.toml, `import hyperspace` succeeds and reports the version
-  (c) `.mcp.json`'s server command is the project env's interpreter at its
-      portable spelling (`.hyperspace/env/bin/python -m hyperspace.mcp`), and
-      spawning it with no env fails loudly (no process, never a silent hang)
+  (c) `.mcp.json`'s server command is the plugin's own launcher
+      (`${CLAUDE_PLUGIN_ROOT}/bin/hyperspace-env -m hyperspace.mcp`, the
+      `.cmd` beside it on Windows), and spawning it with no env fails loudly:
+      exit 4 and one line naming setup, never a silent hang
   (d) both plugin manifests and `.mcp.json` parse as JSON
 
 Usage: probes/check_validate_strict.py --out <path>
@@ -138,16 +139,26 @@ def check_fresh_env_import(evidence: dict) -> bool:
 
 
 def check_mcp_command(evidence: dict) -> bool:
-    with tempfile.TemporaryDirectory() as empty_project:
+    import os
+
+    with tempfile.TemporaryDirectory() as tmp:
+        empty_project = Path(tmp) / "empty project"
+        home = Path(tmp) / "home"
+        empty_project.mkdir()
+        home.mkdir()
         command, args = mcp_launch(ROOT, empty_project)
-        expected = (Path(empty_project) / ".hyperspace" / "env" / "bin" / "python").as_posix()
+        expected = (ROOT / "bin" / "hyperspace-env").as_posix() + (".cmd" if sys.platform == "win32" else "")
+        env = {**os.environ, "HOME": str(home), "USERPROFILE": str(home), "CLAUDE_PROJECT_DIR": str(empty_project)}
         try:
-            subprocess.run([command, *args], capture_output=True, timeout=30)
-            missing_env = "spawned — expected no process without an environment"
+            proc = subprocess.run(
+                [command, *args], cwd=empty_project, env=env, stdin=subprocess.DEVNULL,
+                capture_output=True, encoding="utf-8", errors="replace", timeout=60,
+            )
+            missing_env = {"exit_code": proc.returncode, "stdout": _trim(proc.stdout), "stderr": _trim(proc.stderr)}
+            refused = proc.returncode == 4 and not proc.stdout and len(proc.stderr.strip().splitlines()) == 1
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            missing_env = {"error": f"{type(exc).__name__}: {exc}"}
             refused = False
-        except FileNotFoundError as exc:
-            missing_env = f"FileNotFoundError: {exc}"
-            refused = True
 
     evidence["mcp_command"] = {
         "command": command,

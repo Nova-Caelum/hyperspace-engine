@@ -21,6 +21,8 @@ presence and probing — is a FAKE `which`/`run` callable here. No real `uv`,
 """
 from __future__ import annotations
 
+import functools
+import importlib
 import os
 import stat
 import subprocess
@@ -30,7 +32,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from hyperspace import cli
+from hyperspace import __version__, cli, provenance
 from hyperspace.config import load_config
 from hyperspace.venv_paths import native_python
 from hyperspace.setup.provision import (
@@ -42,6 +44,20 @@ from hyperspace.setup.provision import (
     select_judge,
     write_launcher,
 )
+
+
+_provision_module = importlib.import_module("hyperspace.setup.provision")
+
+
+@pytest.fixture(autouse=True)
+def _scratch_home(tmp_path, monkeypatch):
+    """`provision_env` records what it builds in `~/.hyperspace/envs.json`;
+    point `~` at a scratch folder so no test here touches the real one."""
+    home = tmp_path / "scratch-home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    return home
 
 
 # ── fakes ─────────────────────────────────────────────────────────────────
@@ -67,6 +83,18 @@ def _fake_run_fail(record: list):
     return _run
 
 
+def _fake_register(record: list | None = None):
+    def _register(project, by=""):
+        if record is not None:
+            record.append((project, by))
+        return {}
+    return _register
+
+
+def _step(result: dict, command: str) -> dict:
+    return next(step for step in result["steps"] if step["command"].startswith(command))
+
+
 # ── (a) provision_env / provision: uv vs venv, recorded ──────────────────
 
 
@@ -74,6 +102,7 @@ def test_provision_env_uses_uv_when_on_path(tmp_path):
     record: list = []
     result = provision_env(
         tmp_path, prefer_uv=True, run=_fake_run_ok(record), which=_fake_which({"uv"}), platform="linux",
+        register=_fake_register(),
     )
     assert result["tool"] == "uv"
     assert result["ok"] is True
@@ -103,14 +132,14 @@ def test_provision_env_installs_with_the_windows_interpreter_and_links_bin(tmp_p
 
     result = provision_env(
         tmp_path, prefer_uv=prefer_uv, run=_fake_run_ok(record), which=_fake_which(present),
-        platform="win32", link=fake_link,
+        platform="win32", link=fake_link, register=_fake_register(),
     )
     native = str(tmp_path / ".hyperspace" / "env" / "Scripts" / "python.exe")
     install = record[1]
     assert native in install, install
     assert str(tmp_path / ".hyperspace" / "env" / "bin" / "python") not in install
     assert links == [(tmp_path / ".hyperspace" / "env", "win32")]
-    assert result["steps"][-1] == {"command": "link env/bin -> env/Scripts", "exit_code": 0, "message": "junction ok"}
+    assert _step(result, "link env/bin") == {"command": "link env/bin -> env/Scripts", "exit_code": 0, "message": "junction ok"}
     assert result["ok"] is True
 
 
@@ -120,8 +149,8 @@ def test_provision_env_fails_when_the_windows_link_fails(tmp_path):
         platform="win32", link=lambda env_dir, platform: (False, "volume does not support junctions"),
     )
     assert result["ok"] is False
-    assert result["steps"][-1]["exit_code"] == 1
-    assert "junctions" in result["steps"][-1]["message"]
+    assert _step(result, "link env/bin")["exit_code"] == 1
+    assert "junctions" in _step(result, "link env/bin")["message"]
 
 
 def test_provision_env_never_links_on_posix(tmp_path):
@@ -129,6 +158,7 @@ def test_provision_env_never_links_on_posix(tmp_path):
     result = provision_env(
         tmp_path, prefer_uv=True, run=_fake_run_ok([]), which=_fake_which({"uv"}),
         platform="darwin", link=lambda env_dir, platform: links.append(platform) or (True, ""),
+        register=_fake_register(),
     )
     assert result["ok"] is True
     assert links == []
@@ -139,6 +169,7 @@ def test_provision_env_falls_back_to_venv_without_uv(tmp_path):
     record: list = []
     result = provision_env(
         tmp_path, prefer_uv=True, run=_fake_run_ok(record), which=_fake_which(set()), platform="linux",
+        register=_fake_register(),
     )
     assert result["tool"] == "venv"
     assert result["ok"] is True
@@ -153,6 +184,60 @@ def test_provision_env_records_failure_without_raising(tmp_path):
     )
     assert result["ok"] is False
     assert result["steps"][0]["exit_code"] == 1
+
+
+def test_provision_env_records_the_env_it_built(tmp_path):
+    registered: list = []
+    result = provision_env(
+        tmp_path, prefer_uv=True, run=_fake_run_ok([]), which=_fake_which({"uv"}), platform="linux",
+        register=_fake_register(registered),
+    )
+    assert registered == [(str(tmp_path), f"hyperspace-engine {__version__}")]
+    assert _step(result, "record the environment in ~/.hyperspace/envs.json")["exit_code"] == 0
+    assert result["ok"] is True
+
+
+def test_provision_env_is_not_ok_when_the_record_fails(tmp_path):
+    def failing_register(project, by=""):
+        raise PermissionError("read-only home")
+
+    result = provision_env(
+        tmp_path, prefer_uv=True, run=_fake_run_ok([]), which=_fake_which({"uv"}), platform="linux",
+        register=failing_register,
+    )
+    step = _step(result, "record the environment")
+    assert step["exit_code"] == 1
+    assert "read-only home" in step["message"]
+    assert result["ok"] is False
+
+
+def test_provision_env_does_not_record_a_failed_build(tmp_path):
+    registered: list = []
+    result = provision_env(
+        tmp_path, prefer_uv=True, run=_fake_run_fail([]), which=_fake_which({"uv"}),
+        register=_fake_register(registered),
+    )
+    assert registered == []
+    assert result["ok"] is False
+
+
+def test_provision_env_adds_the_env_to_gitignore_once(tmp_path):
+    (tmp_path / ".gitignore").write_text("*.log", encoding="utf-8")
+    for _ in range(2):
+        result = provision_env(
+            tmp_path, prefer_uv=True, run=_fake_run_ok([]), which=_fake_which({"uv"}), platform="linux",
+            register=_fake_register(),
+        )
+        assert _step(result, "add .hyperspace/env/ to")["exit_code"] == 0
+    assert (tmp_path / ".gitignore").read_text(encoding="utf-8") == "*.log\n.hyperspace/env/\n"
+
+
+def test_provision_env_creates_a_gitignore_when_there_is_none(tmp_path):
+    provision_env(
+        tmp_path, prefer_uv=True, run=_fake_run_ok([]), which=_fake_which({"uv"}), platform="linux",
+        register=_fake_register(),
+    )
+    assert (tmp_path / ".gitignore").read_text(encoding="utf-8") == ".hyperspace/env/\n"
 
 
 def test_provision_chooses_uv_and_records_which(tmp_path):
@@ -321,8 +406,11 @@ def _free_port() -> int:
 def _fake_env(hyperspace_dir: Path, platform: str = sys.platform, *, linked: bool = True) -> None:
     """The interpreter file(s) `doctor` looks for, in `platform`'s layout —
     `bin/python` on POSIX; `Scripts/python.exe` plus (when `linked`) the
-    `bin/python.exe` the junction exposes, on Windows."""
+    `bin/python.exe` the junction exposes, on Windows — and a `pyvenv.cfg`,
+    so `provenance.register` can record it."""
     env_dir = hyperspace_dir / "env"
+    env_dir.mkdir(parents=True, exist_ok=True)
+    (env_dir / "pyvenv.cfg").write_text("home = /usr/bin\n", encoding="utf-8")
     if platform == "win32":
         (env_dir / "Scripts").mkdir(parents=True, exist_ok=True)
         (env_dir / "Scripts" / "python.exe").write_text("fake\n", encoding="utf-8")
@@ -339,14 +427,35 @@ def test_doctor_all_ok(tmp_path):
 
     hyperspace_dir = tmp_path / ".hyperspace"
     _fake_env(hyperspace_dir)
+    provenance.register(str(tmp_path), by="test")
     Store.init(hyperspace_dir / "graph.db").close()
     port = _free_port()
     (hyperspace_dir / "config.toml").write_text(f'judge = "none"\nport = {port}\nuser = "user"\n', encoding="utf-8")
 
     ok, lines = doctor(tmp_path)
-    assert ok is True
+    assert ok is True, lines
     assert all(line.startswith("OK") for line in lines)
-    assert len(lines) == 5
+    assert len(lines) == 6
+
+
+def test_doctor_fails_an_env_this_computer_has_no_record_of(tmp_path):
+    """The plugin's server starts only a recorded env, so an env setup did not
+    record here (a downloaded folder's, or one built before 1.0.3) is a FAIL
+    that names the fix."""
+    from hyperspace.store import Store
+
+    hyperspace_dir = tmp_path / ".hyperspace"
+    _fake_env(hyperspace_dir)
+    Store.init(hyperspace_dir / "graph.db").close()
+    (hyperspace_dir / "config.toml").write_text(f'judge = "none"\nport = {_free_port()}\nuser = "user"\n', encoding="utf-8")
+
+    ok, lines = doctor(tmp_path)
+    assert ok is False
+    env_line = next(line for line in lines if line.split(":")[0].endswith("env"))
+    record_line = next(line for line in lines if line.split(":")[0].endswith("record"))
+    assert env_line.startswith("OK")
+    assert record_line.startswith("FAIL")
+    assert "run the hyperspace-setup skill to rebuild it" in record_line
 
 
 def test_doctor_fails_when_env_missing(tmp_path):
@@ -408,6 +517,7 @@ def test_doctor_recognizes_its_own_door_as_ok(tmp_path):
 
     hyperspace_dir = tmp_path / ".hyperspace"
     _fake_env(hyperspace_dir)
+    provenance.register(str(tmp_path), by="test")
     db_path = hyperspace_dir / "graph.db"
     Store.init(db_path).close()
 
@@ -430,14 +540,18 @@ def test_doctor_recognizes_its_own_door_as_ok(tmp_path):
 
 
 def test_cli_init_provision_non_interactive(tmp_path, monkeypatch, capsys):
+    """`provision`'s `run`/`which` defaults are bound when the module loads,
+    so patching `subprocess.run` / `shutil.which` never reached them and this
+    test used to build a real environment over the network. The fakes go in
+    through `provision` itself now; `provenance.register` is looked up when
+    `provision_env` runs, so it is faked the same way."""
     calls: list = []
-
-    def _fake_run(argv, **kwargs):
-        calls.append(list(argv))
-        return SimpleNamespace(returncode=0, stdout="", stderr="")
-
-    monkeypatch.setattr(subprocess, "run", _fake_run)
-    monkeypatch.setattr("shutil.which", lambda binary: "/fake/bin/uv" if binary == "uv" else None)
+    registered: list = []
+    monkeypatch.setattr(
+        _provision_module, "provision",
+        functools.partial(provision, run=_fake_run_ok(calls), which=_fake_which({"uv"})),
+    )
+    monkeypatch.setattr(provenance, "register", _fake_register(registered))
 
     rc = cli.main([
         "init", "--dir", str(tmp_path),
@@ -451,9 +565,8 @@ def test_cli_init_provision_non_interactive(tmp_path, monkeypatch, capsys):
     assert cfg.judge == "none"
     assert cfg.port == 8791
     assert cfg.user == "user"
-    assert (tmp_path / ".hyperspace" / "env").exists() or any(
-        c[:2] == ["uv", "venv"] for c in calls
-    )
+    assert any(c[:2] == ["uv", "venv"] for c in calls)
+    assert len(registered) == 1
     assert "judge = none" in out
 
 
