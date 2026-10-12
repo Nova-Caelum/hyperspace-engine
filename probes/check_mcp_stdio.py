@@ -5,8 +5,10 @@ Two sub-checks, both must PASS:
   (a) `tests/test_mcp_stdio.py` passes under the repo's own venv.
   (b) a live scripted stdio session against a fresh temp project (its path
       contains a space) whose `.hyperspace/env` is REALLY provisioned by
-      `provision_env` — the server started exactly as `.mcp.json` would start
-      it (`probes/_mcp_launch.py`: the substituted command + args, no shell):
+      `provision_env` (which records it, under a scratch `~` —
+      `probes/_scratch_home.py`) — the server started exactly as `.mcp.json`
+      would start it (`probes/_mcp_launch.py`: the substituted command + args,
+      no shell, through `bin/hyperspace-env` and its provenance check):
       `tools/list` (record the names), one `tools/call` per the seven required
       tools (record `isError` and the top-level result keys), then confirms
       the loopback door answered on its configured port after the first call.
@@ -26,6 +28,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _mcp_launch import mcp_launch  # noqa: E402
+from _scratch_home import scratch_home  # noqa: E402
 from _verdict import write_verdict  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -252,7 +255,7 @@ async def _live_scenario(project_dir: Path, port: int, evidence: dict) -> bool:
 def check_live_smoke(evidence: dict) -> bool:
     from hyperspace.setup.provision import provision_env
 
-    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp, scratch_home(Path(tmp) / "home"):
         project_dir = Path(tmp) / "mcp probe project"
         project_dir.mkdir()
         port = _free_port()

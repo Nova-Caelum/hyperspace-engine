@@ -48,6 +48,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _proc import stop_tree  # noqa: E402
+from _scratch_home import scratch_home  # noqa: E402
 from _verdict import write_verdict  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -163,13 +164,16 @@ def run_checks(evidence: dict, *, dist: str | None, source: str | None, shots: s
     venv_python = find_venv_python(ROOT / ".venv") or Path(sys.executable)
     cli = shutil.which("hyperspace", path=str(venv_python.parent)) or "hyperspace"
     project_dir = Path(tempfile.mkdtemp(prefix="hse-console-check-"))
+    home = project_dir.with_name(project_dir.name + "-home")
     evidence["project_dir"] = str(project_dir) if keep else "(temporary, removed)"
     door = None
     try:
-        init = subprocess.run(
-            [cli, "init", "--dir", str(project_dir), "--provision", "--judge", "none"],
-            capture_output=True, encoding="utf-8", errors="replace", timeout=900,
-        )
+        # A scratch `~`, so the record `--provision` writes is never the real one.
+        with scratch_home(home):
+            init = subprocess.run(
+                [cli, "init", "--dir", str(project_dir), "--provision", "--judge", "none"],
+                capture_output=True, encoding="utf-8", errors="replace", timeout=900,
+            )
         evidence["init"] = {"exit_code": init.returncode, "stdout": _trim(init.stdout, 1500),
                             "stderr": _trim(init.stderr, 1500)}
         env_python = find_venv_python(project_dir / ".hyperspace" / "env")
@@ -247,6 +251,7 @@ def run_checks(evidence: dict, *, dist: str | None, source: str | None, shots: s
             stop_tree(door)
         if not keep:
             shutil.rmtree(project_dir, ignore_errors=True)
+            shutil.rmtree(home, ignore_errors=True)
 
 
 def main(argv=None) -> int:

@@ -5,7 +5,7 @@ hyperspace-setup skill's steps — no key, no `claude`/`codex` on PATH.
 Sub-checks, all must PASS:
   (a) the real provisioning (`hyperspace.setup.provision.provision`) with the
       real `uv` creates `.hyperspace/env` — the venv's own interpreter, and
-      `.hyperspace/env/bin/python` (the spelling `.mcp.json` runs) reaching it
+      `.hyperspace/env/bin/python` (the spelling every skill runs) reaching it
       on every OS (a junction on Windows)
   (b) `.hyperspace/graph.db` exists (`hyperspace init`'s store step)
   (c) `.hyperspace/config.toml` reads `judge = "none"` and the run captured
@@ -53,6 +53,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _proc import stop_tree  # noqa: E402
+from _scratch_home import scratch_home  # noqa: E402
 from _verdict import write_verdict  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -225,7 +226,9 @@ def main(argv=None) -> int:
     started_at = time.time()
     before_freeze = _pip_freeze(sys.executable)
 
-    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+    # A scratch `~`: provisioning records the env in `~/.hyperspace/envs.json`
+    # and doctor reads it back; neither touches the real one.
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp, scratch_home(Path(tmp) / "home"):
         tmp_path = Path(tmp)
         shim_dir = tmp_path / "shim-bin"
         env = _fresh_env(shim_dir)
