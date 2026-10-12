@@ -443,6 +443,10 @@ def provision_and_report(
 
     env_info = result["env"]
     print(f"provisioned .hyperspace/env with {env_info['tool']} ({'OK' if env_info['ok'] else 'FAILED'})")
+    for step in env_info["steps"]:
+        if step["exit_code"] != 0:
+            why = step.get("message") or f"exit code {step['exit_code']}"
+            print(f"FAIL {step['command']}: {why}", file=sys.stderr)
     judge_info = result["judge"]
     print(f"judge = {judge_info['judge']}")
     if judge_info["message"]:

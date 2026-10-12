@@ -34,7 +34,7 @@ import pytest
 
 from hyperspace import __version__, cli, provenance
 from hyperspace.config import load_config
-from hyperspace.venv_paths import native_python
+from hyperspace.venv_paths import _create_junction, native_python
 from hyperspace.setup.provision import (
     check_python,
     doctor,
@@ -238,6 +238,38 @@ def test_provision_env_creates_a_gitignore_when_there_is_none(tmp_path):
         register=_fake_register(),
     )
     assert (tmp_path / ".gitignore").read_text(encoding="utf-8") == ".hyperspace/env/\n"
+
+
+def test_provision_and_report_prints_why_the_record_failed(tmp_path, monkeypatch, capsys):
+    def failing_register(project, by=""):
+        raise PermissionError("read-only home")
+
+    monkeypatch.setattr(provenance, "register", failing_register)
+    rc = _provision_module.provision_and_report(
+        tmp_path, judge="none", run=_fake_run_ok([]), which=_fake_which({"uv"}), platform="linux",
+    )
+    captured = capsys.readouterr()
+    assert rc == 1
+    assert "FAIL record the environment in ~/.hyperspace/envs.json: PermissionError: read-only home" in captured.err
+
+
+def test_provision_and_report_prints_why_it_would_not_build(tmp_path, capsys):
+    elsewhere = tmp_path / "elsewhere"
+    (elsewhere / "env").mkdir(parents=True)
+    project = tmp_path / "project"
+    project.mkdir()
+    if sys.platform == "win32":
+        _create_junction(str(elsewhere), str(project / ".hyperspace"))
+    else:
+        (project / ".hyperspace").symlink_to(elsewhere, target_is_directory=True)
+    rc = _provision_module.provision_and_report(
+        project, judge="none", run=_fake_run_ok([]), which=_fake_which({"uv"}),
+    )
+    captured = capsys.readouterr()
+    assert rc == 1
+    failures = [line for line in captured.err.splitlines() if line.startswith("FAIL ")]
+    assert len(failures) == 1
+    assert "leads outside the project" in failures[0]
 
 
 def test_provision_chooses_uv_and_records_which(tmp_path):
