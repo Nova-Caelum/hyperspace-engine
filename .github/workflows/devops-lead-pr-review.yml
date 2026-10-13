@@ -7,10 +7,8 @@ name: DevOps-Lead PR Review
 # behaviour, PR + review in the devops-lead repo, then bump this pin in a
 # one-line PR here. Never re-point to @main.
 #
-# PINNED 0d1b16c — the last commit that touched the reusable workflow
-# (2026-07-31, "parameterize reusable workflow for multi-tenant callers").
-# Same pin as every other Nova-Caelum caller, so all callers execute identical
-# review logic.
+# PINNED 9bafb29 — canonical persona sync, repo policy deferral, Bot-only
+# author hold and separate review-failed infrastructure labels (devops-lead#4).
 #
 # Fork PRs: the `if:` below restricts this job to same-owner PRs. A PR from a
 # fork is SKIPPED, never run blind — GitHub withholds secrets from fork
@@ -32,7 +30,7 @@ jobs:
       issues: write
       actions: read
       id-token: write
-    uses: Nova-Caelum/devops-lead/.github/workflows/devops-lead-pr-review.yml@0d1b16cee071fcd8896c7dc5130a2644f0360a30
+    uses: Nova-Caelum/devops-lead/.github/workflows/devops-lead-pr-review.yml@9bafb290bf2473beedfdcbd4cb7461ccdb82064b
     secrets: inherit
     with:
       persona_source_repo: 'Nova-Caelum/devops-lead'
@@ -41,6 +39,7 @@ jobs:
       auto_merge_paths: |
         EVERY path in this repo is AUTO-MERGE-SAFE when the diff trips none of the escalate conditions below. Path alone never decides: classify by what the diff DOES, per the numbered escalate list. Routine traffic for this repo — merge it confidently — is: prose edits to README.md, CLAUDE.md, THIRD_PARTY_NOTICES.md and the numbered narrative docs docs/00_start_here.md through docs/09_future_states.md; prose edits to skills/*/SKILL.md, skills/*/demi/** and skills/*/references/** that do not change a gate's stated exit condition or a required artifact; added test cases under tests/** that only ADD assertions; new probes under probes/** that only ADD a check; docs/hyperspace-loop.svg; .gitignore. A file DELETION that matches the PR's stated scope (a retirement, a fold, a supersede) is normal work and merges.
       escalate_paths: |
+        The numbered conditions below are this repo's authoritative escalate list; defer to them instead of the persona's _agentOS-specific list, preserving its default-merge posture, security asymmetry and no additional path-only holds.
         (1) SECRET MATERIAL in the diff — a key, token, password, private key or OAuth/refresh token, a dollar-brace VAR in an .mcp.json secret field, a secret reaching hook stdout, `set -x`, or `curl -v`.
         (2) A FETCH FROM AN UNTRUSTED SOURCE inside a hook, skill, probe or module — curl/wget/fetch/urllib/requests to a URL that is not ours or a known-trusted source, an unpinned dependency added to pyproject.toml, instructions embedded in fetched content, or anything else that puts untrusted text into agent context.
         (3) A NEW DOOR — a new MCP tool or verb in hyperspace/mcp/server.py, hyperspace/tools/registry.py, hyperspace/tools/reads.py or hyperspace/tools/work_items.py; a new route in hyperspace/http/routes.py or hyperspace/http/server.py; a new entry in .mcp.json or bin/hyperspace-mcp; or any newly externally-reachable surface. The local MCP server's tool surface is the product's blast radius — every added verb is a new capability handed to every agent that loads it.
