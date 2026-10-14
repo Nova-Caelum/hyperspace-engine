@@ -34,7 +34,7 @@ from typing import Any
 LOOP_STATUS = (
     "framing", "understanding", "deciding", "specifying", "executing",
     "verifying", "live", "done", "descoped", "killed",
-    "abandoned_budget", "blocked_external",
+    "abandoned_budget", "blocked_external", "paused",
 )
 
 LEGITIMATE_TERMINAL = frozenset({"done", "descoped", "killed"})

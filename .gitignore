@@ -5,3 +5,6 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
+
+# Stable interprocess lock for loop CLI writes.
+loop.state.json.lock

@@ -39,19 +39,21 @@ writes that field. `LOOP_STATUS`/`LEGITIMATE_TERMINAL` now live in
 `loop_terminal.py` (single source); this module imports them.
 
 Budget (T3.6, narrowed by the plugin port — see `PORT_NOTES.md`, S1): the
-state file writes only counters something actually counts. `fresh_sessions`
-and `compactions` carry a `cap`/`used` pair the SessionStart hook bumps;
+state file writes only counters something actually counts. `stamina_blocks`
+counts explicit new session attachments and attached-session compactions;
 counters nothing observes are not written at all.
 """
 
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 import hashlib
 import json
 import os
 import sys
 import tempfile
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -161,23 +163,10 @@ def _cap_block(*, cap: float | None) -> dict[str, Any]:
     return {"cap": cap, "used": 0}
 
 
-# The per-task soft caps the state file counts (Plan T3.6 note, 2026-08-27;
-# PRD §6.3): one fresh session and one compaction per task. Both are counted
-# — the SessionStart hook observes `startup`/`compact` events and bumps
-# them. The source set also named a real-time-hours cap and a worklog-entry
-# cap; nothing in this system observes an hour elapsing or a worklog append,
-# so the plugin port writes neither (S1: a budget field is written only if
-# it is measured — see `PORT_NOTES.md`).
+# Only explicitly attached sessions consume stamina. Historical global counters
+# cannot be converted to blocks; no new soft cap has been authorized.
 SOFT_CAPS: dict[str, dict[str, Any]] = {
-    "fresh_sessions": {"cap": 1},
-    "compactions": {"cap": 1},
-}
-
-# Which SessionStart `source` bumps which cap. Any other source is a no-op
-# (D4 — only detectable caps get detected).
-_BUMP_EVENT_TO_CAP: dict[str, str] = {
-    "startup": "fresh_sessions",
-    "compact": "compactions",
+    "stamina_blocks": {"cap": None},
 }
 
 
@@ -208,6 +197,23 @@ def _describe_existing_run(path: Path) -> str:
         f"run_id={data.get('run_id')}, status={data.get('status')!r}, "
         f"final_route={data.get('final_route')!r}"
     )
+
+
+def _replace_state_file(source, destination):
+    """Preserve atomic replacement while tolerating brief Windows share locks."""
+    deadline = time.monotonic() + 5.0
+    while True:
+        try:
+            os.replace(source, destination)
+            return
+        except PermissionError as exc:
+            # Windows readers/antivirus can briefly deny delete sharing even
+            # while our writer sidecar is held. Never hide permanent failures.
+            if os.name != "nt" or getattr(exc, "winerror", None) not in (5, 32):
+                raise
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(0.05)
 
 
 @dataclass
@@ -272,6 +278,8 @@ class LoopState:
             "artifacts": [],
             "gates": [],
             "budget": _default_budget(),
+            "attached_sessions": [],
+            "project_link": None,
             "driver": {"tier": None, "human_present": False, "authority": None},
             "kill": {"fired": False, "reason": None},
             "descope_decision_ref": None,
@@ -286,6 +294,7 @@ class LoopState:
     def load(cls, path: Path | str) -> "LoopState":
         path = Path(path)
         data = json.loads(path.read_text(encoding="utf-8"))
+        _migrate_stamina(data)
         return cls(path=path, data=data)
 
     def validate(self) -> None:
@@ -295,6 +304,7 @@ class LoopState:
 
     def save(self) -> None:
         """Atomic write: temp file in the same directory, then `os.replace`."""
+        _migrate_stamina(self.data)
         self.validate()
         self.path.parent.mkdir(parents=True, exist_ok=True)
         fd, tmp_name = tempfile.mkstemp(
@@ -304,7 +314,7 @@ class LoopState:
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
                 json.dump(self.data, handle, indent=2, sort_keys=True)
                 handle.write("\n")
-            os.replace(tmp_name, self.path)
+            _replace_state_file(tmp_name, self.path)
         except BaseException:
             if os.path.exists(tmp_name):
                 os.remove(tmp_name)
@@ -327,6 +337,8 @@ class LoopState:
         run into, and a run already sitting at `status: live` must not be
         silently downgraded back to a stage status by a stray `set-node`
         in a resumed session."""
+        if self.data.get("status") == "paused":
+            raise ValueError("resume the run before advancing its node")
         now = _now()
         trail = self.data.setdefault("trail", [])
         if trail and trail[-1].get("exited_at") is None:
@@ -401,6 +413,10 @@ def gate_pass(
     flag to branch on. No other node's gate touches `status`. Saves once
     at the end.
     """
+    if state.data.get("status") == "paused":
+        raise ValueError("resume the run before passing a gate")
+    if node == "specifying" and not state.data.get("project_link"):
+        raise ValueError("Draft requires link-project before its exit gate")
     check_frozen(state)
 
     now = _now()
@@ -426,33 +442,79 @@ def gate_pass(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def bump(state: "LoopState", event: str) -> int:
-    """Increment the one soft cap the SessionStart hook can actually
-    detect for this event (D4): `startup` bumps `fresh_sessions.used`,
-    `compact` bumps `compactions.used`. Any other event is a no-op —
-    returns 0 and does not save, because nothing changed. Returns the new
-    `used` count on a real bump (always >= 1). A crossed cap is never
-    reset here or anywhere else — bumping past `cap` keeps counting.
+def _migrate_stamina(data: dict[str, Any]) -> None:
+    """Normalize in memory; the next real write preserves old counters as history."""
+    budget = data.setdefault("budget", _default_budget())
+    for name in ("fresh_sessions", "compactions"):
+        if name in budget:
+            data.setdefault("legacy_budget", {})[name] = budget.pop(name)
+    budget.setdefault("stamina_blocks", _default_budget()["stamina_blocks"])
+    data.setdefault("attached_sessions", [])
+    data.setdefault("project_link", None)
 
-    Self-gates on terminal status (`done`/`descoped`/`killed`): a finished
-    run's session/compaction count is frozen, so a no-op here is correct
-    rather than a caller having to re-check `loop_terminal.is_terminal()`
-    before calling. Lets the hook call `bump` unconditionally on every file
-    in scope for `startup`/`compact`, before it reads the display line —
-    the display and `notify()` then agree within one session's preload
-    (bumping *after* the display read would show last session's numbers
-    beside this session's notification)."""
-    cap_name = _BUMP_EVENT_TO_CAP.get(event)
-    if cap_name is None:
-        return 0
-    if loop_terminal.is_terminal(state.data.get("status")):
-        return 0
 
-    budget = state.data.setdefault("budget", _default_budget())
-    cap_block = budget.setdefault(cap_name, _cap_block(cap=SOFT_CAPS[cap_name]["cap"]))
-    cap_block["used"] = cap_block.get("used", 0) + 1
+def attach_session(state: "LoopState", session_id: str) -> int:
+    """Explicitly attach a session; each new ID consumes exactly one block."""
+    if not isinstance(session_id, str) or not session_id.strip():
+        raise ValueError("a nonempty session ID is required")
+    if loop_terminal.is_terminal(state.data.get("status")) or state.data.get("status") == "paused":
+        return 0
+    _migrate_stamina(state.data)
+    sessions = state.data["attached_sessions"]
+    if session_id in sessions:
+        return 0
+    sessions.append(session_id)
+    block = state.data["budget"]["stamina_blocks"]
+    block["used"] += 1
     state.save()
-    return cap_block["used"]
+    return block["used"]
+
+
+def bump(state: "LoopState", event: str, session_id: str | None = None) -> int:
+    """Only compaction of an attached session opens another block.
+
+    Startup is counted by attach-session, never by global discovery. Repeated
+    startup/resume hooks and unknown sessions are therefore harmless.
+    """
+    if (event != "compact" or not session_id
+            or session_id not in state.data.get("attached_sessions", [])
+            or state.data.get("status") == "paused"
+            or loop_terminal.is_terminal(state.data.get("status"))):
+        return 0
+    _migrate_stamina(state.data)
+    block = state.data["budget"]["stamina_blocks"]
+    block["used"] += 1
+    state.save()
+    return block["used"]
+
+
+def link_project(state: "LoopState", project: str, modules: list[str]) -> None:
+    if not project.strip() or any(not m.strip() for m in modules):
+        raise ValueError("project and module identifiers must be nonempty")
+    state.data["project_link"] = {"project": project, "modules": sorted(set(modules))}
+    state.save()
+
+
+def pause(state: "LoopState") -> None:
+    status = state.data["status"]
+    if status == "paused":
+        return
+    if loop_terminal.is_terminal(status):
+        raise ValueError("a terminal run cannot be paused")
+    state.data["paused_from"] = status
+    state.data["status"] = "paused"
+    state.save()
+
+
+def resume(state: "LoopState") -> None:
+    if state.data["status"] != "paused":
+        raise ValueError("only a paused run can be resumed")
+    previous = state.data.get("paused_from")
+    if previous not in LOOP_STATUS or previous == "paused" or loop_terminal.is_terminal(previous):
+        raise ValueError("paused run has no valid previous status")
+    state.data["status"] = previous
+    state.data.pop("paused_from", None)
+    state.save()
 
 
 def notify(state: "LoopState") -> list[str]:
@@ -779,7 +841,21 @@ def _cmd_confirm(args: argparse.Namespace) -> int:
 
 def _cmd_bump(args: argparse.Namespace) -> int:
     state = LoopState.load(args.path)
-    bump(state, event=args.event)
+    bump(state, event=args.event, session_id=args.session_id)
+    print(json.dumps(state.data, indent=2, sort_keys=True))
+    return 0
+
+
+def _cmd_run_event(args: argparse.Namespace) -> int:
+    state = LoopState.load(args.path)
+    if args.command == "attach-session":
+        attach_session(state, args.session_id)
+    elif args.command == "link-project":
+        link_project(state, args.project, args.module)
+    elif args.command == "pause":
+        pause(state)
+    elif args.command == "resume":
+        resume(state)
     print(json.dumps(state.data, indent=2, sort_keys=True))
     return 0
 
@@ -915,11 +991,22 @@ def build_parser() -> argparse.ArgumentParser:
     p_confirm.set_defaults(func=_cmd_confirm)
 
     p_bump = sub.add_parser(
-        "bump", help="Increment a detected budget cap for one SessionStart event (startup|compact; anything else is a no-op)."
+        "bump", help="Count compaction for an explicitly attached session."
     )
     p_bump.add_argument("path")
     p_bump.add_argument("--event", required=True, help="SessionStart source, e.g. startup|compact|resume|clear")
+    p_bump.add_argument("--session-id", default=None)
     p_bump.set_defaults(func=_cmd_bump)
+
+    for verb in ("attach-session", "link-project", "pause", "resume"):
+        command = sub.add_parser(verb)
+        command.add_argument("path")
+        if verb == "attach-session":
+            command.add_argument("--session-id", required=True)
+        if verb == "link-project":
+            command.add_argument("--project", required=True)
+            command.add_argument("--module", action="append", default=[])
+        command.set_defaults(func=_cmd_run_event)
 
     p_notify = sub.add_parser(
         "notify", help="Print one line per crossed soft cap. Never blocks; exits 0 always."
@@ -942,10 +1029,46 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+@contextmanager
+def _command_lock(path):
+    """Serialize CLI read/modify/write across sessions, using a stable sidecar.
+
+    State writes replace the JSON inode, so locking the JSON itself is unsafe.
+    The sidecar stays in place and is released by the OS even on process death.
+    """
+    if not path:
+        yield
+        return
+    with open(str(Path(path).resolve()) + ".lock", "a+b") as handle:
+        if os.name == "nt":
+            import msvcrt
+            if handle.tell() == 0:
+                handle.write(b"0")
+                handle.flush()
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            if os.name == "nt":
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    return args.func(args)
+    try:
+        with _command_lock(getattr(args, "path", None)):
+            return args.func(args)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

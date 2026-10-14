@@ -112,3 +112,7 @@ NOT FOR:
 - **Authored by:** the engine's authors on 2026-09-07.
 - **Community lineage:** obra/superpowers `brainstorming` 6.3.0 (MIT), archived with the framework's research notes. Ported: three-path classification said aloud; one-way ratchet; "too simple to need approval" as "too simple to need tests"; explore context first; Red Flags table shape. Not ported: the HARD-GATE human approval before implementation (replaced by the validator gate and the user's `live → done` confirm), the visual companion, the spec file under `docs/superpowers/specs/`, the process-flow graph, the writing-plans handoff. Port / no-port table: an internal derivation-scope record, 2026-09-07.
 - **Related:** `gear3-decide`, `gear4-draft`, `gear5-build`, `references/candidate-template.json`, `bin/validate_candidate.py`, `bin/loop_state.py`, `bin/node_gates.py`.
+
+## Run attachment and pause
+
+Before working on a new or resumed run, use `.hyperspace/env/bin/python "${CLAUDE_PLUGIN_ROOT}/bin/loop_state.py" attach-session <state> --session-id <actual-session-id>` with the ID from the session-id preload line. Never attach every discovered run or invent a session ID. A new ID counts one stamina block; attached-session compaction counts one more. Repeated startup is free. Use `pause <state>` to suspend a run and `resume <state>` to restore its previous status before continuing.

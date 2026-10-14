@@ -1,13 +1,26 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://github.com/Nova-Caelum/hyperspace-engine/schemas/loop-state/1",
-  "title": "hyperspace-engine — loop.state.json",
-  "description": "T3.1 (ncf-m3-state-object). Machine-readable position for one multi-session loop run. Mirrors the Graph Machine contract graph_library/contracts/run.py's MachineRun field-for-field where meaning matches (run_id, original_input, input_hash, status, current_node); framework_version plays machine_version's role. status uses the framework PRD's #9.1 LoopStatus set, not run.py's RunStatus — the two enums diverge deliberately (see the T3.1 engineering notes' field-mirroring table). Validated by bin/loop_state.py's hand-rolled minimal draft-07 subset (required/type/enum/properties/items only) — see that file's module docstring for why.",
+  "title": "hyperspace-engine \u2014 loop.state.json",
+  "description": "T3.1 (ncf-m3-state-object). Machine-readable position for one multi-session loop run. Mirrors the Graph Machine contract graph_library/contracts/run.py's MachineRun field-for-field where meaning matches (run_id, original_input, input_hash, status, current_node); framework_version plays machine_version's role. status uses the framework PRD's #9.1 LoopStatus set, not run.py's RunStatus \u2014 the two enums diverge deliberately (see the T3.1 engineering notes' field-mirroring table). Validated by bin/loop_state.py's hand-rolled minimal draft-07 subset (required/type/enum/properties/items only) \u2014 see that file's module docstring for why.",
   "type": "object",
   "required": [
-    "run_id", "goal_slug", "framework_version", "original_input", "input_hash",
-    "status", "current_node", "trail", "artifacts", "gates", "budget",
-    "driver", "kill", "descope_decision_ref", "final_route", "escape_rate"
+    "run_id",
+    "goal_slug",
+    "framework_version",
+    "original_input",
+    "input_hash",
+    "status",
+    "current_node",
+    "trail",
+    "artifacts",
+    "gates",
+    "budget",
+    "driver",
+    "kill",
+    "descope_decision_ref",
+    "final_route",
+    "escape_rate"
   ],
   "properties": {
     "run_id": {
@@ -19,11 +32,11 @@
       "type": "string"
     },
     "framework_version": {
-      "description": "Plays MachineRun.machine_version's role for the loop (renamed per DECISIONS.md D6 — 'machine_version' names the Graph Machine specifically).",
+      "description": "Plays MachineRun.machine_version's role for the loop (renamed per DECISIONS.md D6 \u2014 'machine_version' names the Graph Machine specifically).",
       "type": "string"
     },
     "original_input": {
-      "description": "Mirrors MachineRun.original_input. Immutable — the raw submission, set once at init, never rewritten by later saves.",
+      "description": "Mirrors MachineRun.original_input. Immutable \u2014 the raw submission, set once at init, never rewritten by later saves.",
       "type": "string"
     },
     "input_hash": {
@@ -31,29 +44,61 @@
       "type": "string"
     },
     "status": {
-      "description": "PRD #9.1's LoopStatus set, verbatim. Deliberately NOT run.py's RunStatus (see Engineer_Notes field-mirroring table for the divergence).",
+      "description": "Loop lifecycle status; paused retains current_node and paused_from until resume.",
       "type": "string",
       "enum": [
-        "framing", "understanding", "deciding", "specifying", "executing",
-        "verifying", "live", "done", "descoped", "killed",
-        "abandoned_budget", "blocked_external"
+        "framing",
+        "understanding",
+        "deciding",
+        "specifying",
+        "executing",
+        "verifying",
+        "live",
+        "done",
+        "descoped",
+        "killed",
+        "abandoned_budget",
+        "blocked_external",
+        "paused"
       ]
     },
     "current_node": {
       "description": "Mirrors MachineRun.current_node. The stage/node identifier the run is presently in, or null before any node has been entered.",
-      "type": ["string", "null"]
+      "type": [
+        "string",
+        "null"
+      ]
     },
     "trail": {
       "description": "History of node transitions, oldest first. The most recent entry has exited_at/outcome null while the run is still in that node.",
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["node", "entered_at", "exited_at", "outcome"],
+        "required": [
+          "node",
+          "entered_at",
+          "exited_at",
+          "outcome"
+        ],
         "properties": {
-          "node": { "type": "string" },
-          "entered_at": { "type": "string" },
-          "exited_at": { "type": ["string", "null"] },
-          "outcome": { "type": ["string", "null"] }
+          "node": {
+            "type": "string"
+          },
+          "entered_at": {
+            "type": "string"
+          },
+          "exited_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "outcome": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
         }
       }
     },
@@ -62,105 +107,237 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["path", "sha256", "frozen_at", "frozen_by"],
+        "required": [
+          "path",
+          "sha256",
+          "frozen_at",
+          "frozen_by"
+        ],
         "properties": {
-          "path": { "type": "string" },
-          "sha256": { "type": "string" },
-          "frozen_at": { "type": ["string", "null"] },
-          "frozen_by": { "type": ["string", "null"] }
+          "path": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "frozen_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "frozen_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
         }
       }
     },
     "gates": {
-      "description": "T3.1 design decision (see Engineer_Notes 'gates[] item shape' section — T3.2 inherits this shape). One entry per node whose exit gate has been evaluated.",
+      "description": "T3.1 design decision (see Engineer_Notes 'gates[] item shape' section \u2014 T3.2 inherits this shape). One entry per node whose exit gate has been evaluated.",
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["node", "passed", "passed_at"],
+        "required": [
+          "node",
+          "passed",
+          "passed_at"
+        ],
         "properties": {
-          "node": { "type": "string" },
-          "passed": { "type": "boolean" },
-          "passed_at": { "type": ["string", "null"] }
+          "node": {
+            "type": "string"
+          },
+          "passed": {
+            "type": "boolean"
+          },
+          "passed_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
         }
       }
     },
     "budget": {
-      "description": "T3.6 (ncf-m3-budget-counters) fills the counting behavior; this shape is declared now. Two counted soft caps plus three round/retry counters. Only measured fields are written (S1, bin/PORT_NOTES.md): a cap nothing observes is not in the file.",
+      "description": "Stamina blocks for attached sessions, plus existing advisory and retry counters.",
       "type": "object",
       "required": [
-        "fresh_sessions", "compactions",
-        "rework_rounds", "doubled_back_rounds", "doubled_back_events", "stage_retries"
+        "rework_rounds",
+        "doubled_back_rounds",
+        "doubled_back_events",
+        "stage_retries",
+        "stamina_blocks"
       ],
       "properties": {
-        "fresh_sessions": {
-          "description": "T3.6 (ncf-m3-budget-counters). Soft cap: 1, per task (a provisional number, PRD §6.3). Counted: the SessionStart hook observes `source=startup` and calls `bump --event startup`.",
-          "type": "object",
-          "required": ["cap", "used"],
-          "properties": {
-            "cap": { "type": ["number", "null"] },
-            "used": { "type": "number" }
-          }
+        "rework_rounds": {
+          "type": "integer"
         },
-        "compactions": {
-          "description": "T3.6 (ncf-m3-budget-counters). Soft cap: 1, per task (a provisional number, PRD §6.3). Counted: the SessionStart hook observes `source=compact` and calls `bump --event compact`.",
-          "type": "object",
-          "required": ["cap", "used"],
-          "properties": {
-            "cap": { "type": ["number", "null"] },
-            "used": { "type": "number" }
-          }
-        },
-        "rework_rounds": { "type": "integer" },
         "doubled_back_rounds": {
-          "description": "T3.2 (ncf-m3-artifact-freeze). Incremented by check_frozen() (bin/loop_state.py) on every frozen-artifact hash mismatch it discovers — never by an argument telling it a change happened.",
+          "description": "T3.2 (ncf-m3-artifact-freeze). Incremented by check_frozen() (bin/loop_state.py) on every frozen-artifact hash mismatch it discovers \u2014 never by an argument telling it a change happened.",
           "type": "integer"
         },
         "doubled_back_events": {
-          "description": "T3.2 (ncf-m3-artifact-freeze). One entry per hash mismatch check_frozen() has ever detected, oldest first — the durable answer to 'which artifact, and when'.",
+          "description": "T3.2 (ncf-m3-artifact-freeze). One entry per hash mismatch check_frozen() has ever detected, oldest first \u2014 the durable answer to 'which artifact, and when'.",
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["path", "detected_at"],
+            "required": [
+              "path",
+              "detected_at"
+            ],
             "properties": {
-              "path": { "type": "string" },
-              "detected_at": { "type": "string" }
+              "path": {
+                "type": "string"
+              },
+              "detected_at": {
+                "type": "string"
+              }
             }
           }
         },
-        "stage_retries": { "type": "integer" }
+        "stage_retries": {
+          "type": "integer"
+        },
+        "stamina_blocks": {
+          "description": "One block for each explicitly attached new session ID, plus one for each compaction in an attached session. Unset cap until chosen by the owner.",
+          "type": "object",
+          "required": [
+            "cap",
+            "used"
+          ],
+          "properties": {
+            "cap": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "used": {
+              "type": "number"
+            }
+          }
+        }
       }
     },
     "driver": {
       "description": "T3.6 fills behavior. Who/what was driving at the last approval.",
       "type": "object",
-      "required": ["tier", "human_present", "authority"],
+      "required": [
+        "tier",
+        "human_present",
+        "authority"
+      ],
       "properties": {
-        "tier": { "type": ["string", "null"] },
-        "human_present": { "type": "boolean" },
-        "authority": { "type": ["string", "null"] }
+        "tier": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "human_present": {
+          "type": "boolean"
+        },
+        "authority": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
       }
     },
     "kill": {
       "description": "T3.5 (ncf-m3-kill-predicate) fills the predicate that sets this. Cause is recorded here; cause never gates (PRD #9.1).",
       "type": "object",
-      "required": ["fired", "reason"],
+      "required": [
+        "fired",
+        "reason"
+      ],
       "properties": {
-        "fired": { "type": "boolean" },
-        "reason": { "type": ["string", "null"] }
+        "fired": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
       }
     },
     "descope_decision_ref": {
-      "description": "T3.5 (ncf-m3-kill-predicate). Set by the `descope` event verb (bin/loop_state.py); a pointer to where the descope decision is recorded, per PRD #9.3 ('the decision is recorded in loop.state.json, not remembered'). Null until a descope decision exists. Presence (not content) is what terminal_route() in loop_terminal.py consults — cause-blind by the same rule as `kill.reason`.",
-      "type": ["string", "null"]
+      "description": "T3.5 (ncf-m3-kill-predicate). Set by the `descope` event verb (bin/loop_state.py); a pointer to where the descope decision is recorded, per PRD #9.3 ('the decision is recorded in loop.state.json, not remembered'). Null until a descope decision exists. Presence (not content) is what terminal_route() in loop_terminal.py consults \u2014 cause-blind by the same rule as `kill.reason`.",
+      "type": [
+        "string",
+        "null"
+      ]
     },
     "final_route": {
       "description": "PRD #9.1's LEGITIMATE_TERMINAL set, or null before the run ends. Deliberately NOT run.py's TerminalRoute (see Engineer_Notes field-mirroring table).",
-      "type": ["string", "null"],
-      "enum": ["done", "descoped", "killed", null]
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "done",
+        "descoped",
+        "killed",
+        null
+      ]
     },
     "escape_rate": {
       "description": "PRD #6.3: recorded, never thresholded in v1. Written when work moves from finished to confirmed; null until then.",
-      "type": ["number", "null"]
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "attached_sessions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "project_link": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "project",
+        "modules"
+      ],
+      "properties": {
+        "project": {
+          "type": "string"
+        },
+        "modules": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "paused_from": {
+      "type": "string",
+      "enum": [
+        "framing",
+        "understanding",
+        "deciding",
+        "specifying",
+        "executing",
+        "verifying",
+        "live",
+        "abandoned_budget",
+        "blocked_external"
+      ]
+    },
+    "legacy_budget": {
+      "type": "object",
+      "description": "Unattributed historical global counters; never used to infer stamina."
     }
   }
 }

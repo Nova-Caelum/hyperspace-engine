@@ -45,6 +45,7 @@ MAP_FILENAME = "DRIVE_MAP.md"
 # ---- the schema (single source) -------------------------------------------
 # name -> default description. Files the engine itself emits at the run root.
 ROOT_FILES: dict[str, str] = {
+    "loop.state.json.lock": "OS lock sidecar for concurrent engine commands. Never remove while a command runs.",
     "loop.state.json": "Engine state: current node, gates passed, frozen hashes. Never hand-edit.",
     "original_input.md": "The user's ask, verbatim. The run's anchor.",
     MAP_FILENAME: "This file. Generated; rewritten at every node entry and every gate.",
