@@ -16,7 +16,7 @@ local verifier, and a task-graph console in your browser at `localhost`. No acco
 Nova Caelum service.
 
 <p align="center">
-  <img src="docs/hyperspace-loop.svg" alt="The five stations of the Hyperspace Engine and the gates between them" width="100%">
+  <img src="docs/hyperspace-workflow.png" alt="The Hyperspace workflow: Understand, Decide, Draft and Build each pass through a numbered check before Use it live, under a Verification machinery band that combines Deterministic checks and Intelligent judgment" width="100%">
 </p>
 
 ---
@@ -89,6 +89,7 @@ an earlier version has no record, so the server will not start it. Run the `hype
 ---
 
 ## How the loop works
+
 
 | Station | Enters when | Leaves with |
 |---|---|---|
